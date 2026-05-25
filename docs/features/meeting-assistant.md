@@ -64,7 +64,7 @@ The core idea is **VAD-style (pause-delimited) segmentation with interim results
 
 ```mermaid
 flowchart TD
-  start([Start listening]) --> spawn["ffmpeg per source\n-f segment -segment_time 1.5\nmono 16kHz wav frames"]
+  start([Start listening]) --> spawn["ffmpeg per source\n-f segment -segment_time 0.5\nmono 16kHz wav frames"]
   spawn --> poll{"poll dir every 1s\nframe complete?"}
   poll -->|no| poll
   poll -->|yes| vad["measure peak dBFS\n(ffmpeg volumedetect)"]
@@ -72,7 +72,7 @@ flowchart TD
   vad -->|"<= threshold (silence)"| final
   buf --> cap{"buffer >= ~24s?"}
   cap -->|yes| final["finalize: concat frames →\nwhisper → final text"]
-  cap -->|no| interim["every 2 frames (first immediately):\nconcat buffer → whisper →\nupsert SAME row (interim=true)"]
+  cap -->|no| interim["every 6 frames (first immediately):\nconcat buffer → whisper →\nupsert SAME row (interim=true)"]
   interim --> poll
   final --> persist["update row (final) +\nrun deterministic assist detection"]
   persist --> poll
@@ -80,9 +80,9 @@ flowchart TD
 
 Key parameters (in `apps/web/src/lib/capture/manager.ts`):
 
-- `FRAME_SECONDS = 1.5` — VAD resolution; ffmpeg `segment` muxer frame length.
+- `FRAME_SECONDS = 0.5` — VAD resolution; ffmpeg `segment` muxer frame length. Kept small so a frame can land entirely inside a natural inter-sentence pause (median ~0.5s in real meetings); larger frames miss those pauses and let the 24s cap chop sentences mid-clause.
 - `MAX_UTTERANCE_FRAMES` — force-flush a long monologue at ~24s so latency stays bounded.
-- `INTERIM_EVERY_FRAMES = 2` — re-transcribe cadence; the first speech frame always shows immediately.
+- `INTERIM_EVERY_FRAMES = 6` — re-transcribe cadence (~3s); the first speech frame always shows immediately.
 - `MEETING_CAPTURE_SILENCE_MAX_DB` (default `-45`) — peak-volume floor below which a frame is treated as silence. Doubles as the VAD threshold.
 - Transcription: `whisper-cli -m <model> -f <wav> -nt -np`. Output is normalized to strip non-speech tags (`[...]`, `(...)`, `*...*`); empty results are skipped, so silence produces nothing. Output that `isLikelyHallucinatedTranscription` (in `packages/core`) flags as a stock Whisper silence-hallucination (e.g. `"Thank you."`, `"♪♪"` from a quiet mic) is also dropped as noise.
 

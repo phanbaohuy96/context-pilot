@@ -10,12 +10,18 @@ import { createDeterministicMeetingInsights } from "../meeting-insights";
 
 // Short frames are the VAD resolution: each is classified speech/silence, then
 // consecutive speech frames are stitched into one utterance and flushed on a pause.
-const FRAME_SECONDS = 1.5;
+// Natural inter-sentence pauses in real meetings are short (median ~0.5s), so the
+// frame must be small enough to land entirely inside one — measured against a real
+// 25-min recording, 0.5s cuts on a real pause ~86% of the time (vs ~33% at 1.5s,
+// where the 24s cap dominated and chopped sentences mid-clause). Transcription is
+// unaffected by frame size: whisper always runs on the concatenated speech buffer.
+const FRAME_SECONDS = 0.5;
 // Force-flush a long monologue with no pause so latency stays bounded.
 const MAX_UTTERANCE_FRAMES = Math.ceil(24 / FRAME_SECONDS);
 // Re-transcribe the growing utterance this often (in frames) to refine the interim
-// line. The first frame always shows immediately for low first-word latency.
-const INTERIM_EVERY_FRAMES = 2;
+// line (~3s cadence). The first frame always shows immediately for low first-word
+// latency, so a smaller frame also means a faster first caption.
+const INTERIM_EVERY_FRAMES = 6;
 
 type SourceKind = "MIC" | "MEETING";
 
