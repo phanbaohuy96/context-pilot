@@ -328,6 +328,13 @@ class CaptureRunner {
     try {
       const text = await this.transcribeFrames(frames);
       if (!text) {
+        // The buffered audio transcribed to nothing (silence/noise). If an interim
+        // line was already shown for it, retract that row instead of leaving it
+        // stuck as "refining" forever.
+        if (utteranceId) {
+          await prisma.transcriptUtterance.delete({ where: { id: utteranceId } }).catch(() => undefined);
+          this.utterances -= 1;
+        }
         return;
       }
 
