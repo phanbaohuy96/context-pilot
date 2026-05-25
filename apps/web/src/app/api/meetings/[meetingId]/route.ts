@@ -15,7 +15,9 @@ export async function GET(_request: Request, { params }: MeetingRouteContext): P
     where: { id: meetingId },
     include: {
       source: true,
-      utterances: { orderBy: { startedAt: "asc" }, take: 300 },
+      // Fetch the most recent window (desc) so the live caption is never dropped on a
+      // long meeting, then restore chronological order for the client.
+      utterances: { orderBy: { startedAt: "desc" }, take: 1000 },
       insights: { orderBy: { createdAt: "desc" }, take: 50 },
       summaries: { orderBy: { createdAt: "desc" }, take: 5 },
     },
@@ -25,6 +27,7 @@ export async function GET(_request: Request, { params }: MeetingRouteContext): P
     return NextResponse.json({ error: "Meeting session was not found." }, { status: 404 });
   }
 
+  meeting.utterances.reverse();
   return NextResponse.json({ meeting });
 }
 

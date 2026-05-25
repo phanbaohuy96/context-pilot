@@ -13,11 +13,14 @@ type UtteranceRouteContext = {
 
 export async function GET(_request: Request, { params }: UtteranceRouteContext): Promise<Response> {
   const { meetingId } = await params;
+  // Most recent window (desc) so a long meeting isn't truncated to its oldest lines,
+  // then restored to chronological order for the response.
   const utterances = await prisma.transcriptUtterance.findMany({
     where: { meetingSessionId: meetingId },
-    orderBy: { startedAt: "asc" },
-    take: 300,
+    orderBy: { startedAt: "desc" },
+    take: 1000,
   });
+  utterances.reverse();
 
   return NextResponse.json({ utterances });
 }

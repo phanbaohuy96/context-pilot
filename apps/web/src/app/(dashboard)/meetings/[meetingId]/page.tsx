@@ -47,7 +47,9 @@ export default async function MeetingWorkspacePage({ params }: MeetingWorkspaceP
     where: { id: meetingId },
     include: {
       source: true,
-      utterances: { orderBy: { startedAt: "asc" }, take: 300 },
+      // Most recent window (desc) so a long meeting keeps its latest lines; restored
+      // to chronological order below for the transcript view.
+      utterances: { orderBy: { startedAt: "desc" }, take: 1000 },
       insights: { orderBy: { createdAt: "desc" }, take: 50 },
       summaries: { orderBy: { createdAt: "desc" }, take: 5 },
     },
@@ -56,6 +58,8 @@ export default async function MeetingWorkspacePage({ params }: MeetingWorkspaceP
   if (!meeting) {
     notFound();
   }
+
+  meeting.utterances.reverse();
 
   return (
     <>
