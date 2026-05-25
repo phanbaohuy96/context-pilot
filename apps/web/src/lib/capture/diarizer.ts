@@ -15,7 +15,9 @@ function modelId(): string {
 }
 
 function diarizationEnabled(): boolean {
-  return process.env.MEETING_CAPTURE_DIARIZATION !== "false";
+  // Opt-in: enabling it downloads a speaker model on first use, so it stays off
+  // unless explicitly turned on.
+  return process.env.MEETING_CAPTURE_DIARIZATION === "true";
 }
 
 export function speakerSimilarityThreshold(fallback: number): number {

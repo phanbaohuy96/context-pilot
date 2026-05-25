@@ -94,12 +94,12 @@ Key parameters (in `apps/web/src/lib/capture/manager.ts`):
 
 ### Speaker diarization (others channel)
 
-The mic channel is a single speaker (you → `SELF`). The **others** channel carries every remote participant, so each finalized utterance there is grouped into a stable per-meeting **Speaker N** identity:
+**Opt-in** (off by default; enable with `MEETING_CAPTURE_DIARIZATION="true"` — it downloads a model on first use). The mic channel is a single speaker (you → `SELF`). The **others** channel carries every remote participant, so when enabled each finalized utterance there is grouped into a stable per-meeting **Speaker N** identity:
 
 - `apps/web/src/lib/capture/diarizer.ts` embeds the utterance audio with a local ONNX speaker model (`Xenova/wavlm-base-plus-sv`, run via `@huggingface/transformers`/onnxruntime, downloaded to the model cache on first use).
 - `assignSpeaker` in `packages/core/src/domain/diarization.ts` does the grouping: cosine-compare the embedding to each existing speaker centroid, join the best match above the similarity threshold, else start a new speaker. Pure and deterministic — only the embedding is a model call.
 - The label is stored on the utterance's `engineMetadata.speakerLabel` (no schema change) and shown in the transcript; `speakerKey` is the 1-based id.
-- Accuracy is **approximate** — short turns and similar voices on mono 16 kHz audio can be mislabeled. Tuning: `MEETING_CAPTURE_DIARIZATION` (set `false` to disable), `MEETING_DIARIZATION_SIMILARITY_THRESHOLD` (default `0.86`; higher splits a speaker, lower merges speakers), `MEETING_DIARIZATION_MODEL`, `MEETING_DIARIZATION_MODEL_CACHE`. If the model fails to load, the utterance is still saved (just without a speaker label).
+- Accuracy is **approximate** — short turns and similar voices on mono 16 kHz audio can be mislabeled. Tuning: `MEETING_CAPTURE_DIARIZATION` (`"true"` to enable; off otherwise), `MEETING_DIARIZATION_SIMILARITY_THRESHOLD` (default `0.86`; higher splits a speaker, lower merges speakers), `MEETING_DIARIZATION_MODEL`, `MEETING_DIARIZATION_MODEL_CACHE`. If the model fails to load, the utterance is still saved (just without a speaker label).
 
 ## Assist cards (deterministic)
 
