@@ -92,6 +92,7 @@ export default async function MeetingWorkspacePage({ params }: MeetingWorkspaceP
           startedAt: utterance.startedAt.toISOString(),
           text: utterance.text,
           interim: (utterance.engineMetadata as { interim?: boolean } | null)?.interim === true,
+          speakerLabel: (utterance.engineMetadata as { speakerLabel?: string } | null)?.speakerLabel,
         }))}
         initialInsights={meeting.insights.map((insight) => ({
           id: insight.id,

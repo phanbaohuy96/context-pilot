@@ -13,10 +13,11 @@ type Utterance = {
   startedAt: string;
   text: string;
   interim?: boolean;
+  speakerLabel?: string;
 };
 
-type RawUtterance = Omit<Utterance, "interim"> & {
-  engineMetadata?: { interim?: boolean } | null;
+type RawUtterance = Omit<Utterance, "interim" | "speakerLabel"> & {
+  engineMetadata?: { interim?: boolean; speakerLabel?: string } | null;
 };
 
 type Insight = {
@@ -50,6 +51,7 @@ function toUtterance(raw: RawUtterance): Utterance {
     startedAt: raw.startedAt,
     text: raw.text,
     interim: raw.engineMetadata?.interim === true,
+    speakerLabel: raw.engineMetadata?.speakerLabel,
   };
 }
 
@@ -285,7 +287,7 @@ export function LiveMeetingWorkspace({
                 className={`bubble ${utterance.speakerRole === "SELF" ? "bubble-self" : "bubble-other"}${utterance.interim ? " bubble-interim" : ""}`}
               >
                 <header className="bubble-head">
-                  <span className="bubble-speaker">{speakerLabel(utterance.speakerRole)}</span>
+                  <span className="bubble-speaker">{displaySpeaker(utterance)}</span>
                   {utterance.interim ? (
                     <span className="bubble-live">refining</span>
                   ) : (
@@ -324,7 +326,7 @@ export function LiveMeetingWorkspace({
               {latestCaption ? latestCaption.text : "Start listening, then play any meeting audio or speak into the microphone."}
             </p>
             {latestCaption ? (
-              <p className="muted">{speakerLabel(latestCaption.speakerRole)} · {latestCaption.sourceChannel} · {new Date(latestCaption.startedAt).toLocaleTimeString()}</p>
+              <p className="muted">{displaySpeaker(latestCaption)} · {latestCaption.sourceChannel} · {new Date(latestCaption.startedAt).toLocaleTimeString()}</p>
             ) : null}
           </div>
 
@@ -423,6 +425,15 @@ function speakerLabel(role: SpeakerRole): string {
     return "Participant";
   }
   return "Unknown";
+}
+
+// Prefers the diarized "Speaker N" label when present; otherwise falls back to the
+// coarse role label ("Participant"). Your own mic is always "You".
+function displaySpeaker(utterance: Utterance): string {
+  if (utterance.speakerRole === "SELF") {
+    return "You";
+  }
+  return utterance.speakerLabel ?? speakerLabel(utterance.speakerRole);
 }
 
 function sourceLabel(source: CaptureSourceStatus): string {

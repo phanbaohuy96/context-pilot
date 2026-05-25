@@ -4,9 +4,16 @@ import { mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import type { MeetingSourceChannel, MeetingSpeakerRole } from "@prisma/client";
-import { isLikelyHallucinatedTranscription } from "@teams-observer/core";
+import {
+  assignSpeaker,
+  DEFAULT_SPEAKER_SIMILARITY_THRESHOLD,
+  isLikelyHallucinatedTranscription,
+  speakerLabel,
+  type SpeakerCluster,
+} from "@teams-observer/core";
 import { prisma } from "@teams-observer/db";
 import { createDeterministicMeetingInsights } from "../meeting-insights";
+import { embedSpeaker, speakerSimilarityThreshold, warmupDiarizer } from "./diarizer";
 
 // Short frames are the VAD resolution: each is classified speech/silence, then
 // consecutive speech frames are stitched into one utterance and flushed on a pause.
@@ -155,6 +162,10 @@ class CaptureRunner {
   private framesSinceTranscribe = 0;
   private draining = false;
   private exited = false;
+  // Per-meeting speaker centroids; only used when this runner diarizes (the "others"
+  // channel, which carries multiple participants). Mic audio is a single speaker.
+  private readonly speakerClusters: SpeakerCluster[] = [];
+  private readonly similarityThreshold = speakerSimilarityThreshold(DEFAULT_SPEAKER_SIMILARITY_THRESHOLD);
 
   running = false;
   utterances = 0;
@@ -168,9 +179,15 @@ class CaptureRunner {
     private readonly input: string,
     private readonly speakerRole: MeetingSpeakerRole,
     private readonly sourceChannel: MeetingSourceChannel,
+    private readonly diarize: boolean,
   ) {}
 
   async start(): Promise<void> {
+    // Preload the speaker model now so its cold load overlaps capture instead of
+    // stalling the first finalized utterance.
+    if (this.diarize) {
+      warmupDiarizer();
+    }
     this.dir = await mkdtemp(join(tmpdir(), "meeting-capture-"));
     const segmentPattern = join(this.dir, "seg_%05d.wav");
 
@@ -281,6 +298,31 @@ class CaptureRunner {
     }
   }
 
+  // Embeds the utterance's voice and groups it into a stable per-meeting speaker key.
+  // Returns metadata to merge into the row, or {} when diarization is off/unavailable
+  // so a model failure never blocks the transcript.
+  private async classifySpeaker(frames: number[]): Promise<{ speakerKey?: number; speakerLabel?: string }> {
+    if (!this.diarize) {
+      return {};
+    }
+    const framePaths = frames.map((index) => this.framePath(index));
+    const embedPath = join(this.dir, `emb_${frames[0]}_${randomUUID()}.wav`);
+    try {
+      await concatFrames(this.dir, framePaths, embedPath);
+      const embedding = await embedSpeaker(embedPath);
+      if (!embedding) {
+        return {};
+      }
+      const key = assignSpeaker(this.speakerClusters, embedding, this.similarityThreshold);
+      return { speakerKey: key, speakerLabel: speakerLabel(key) };
+    } catch (error) {
+      this.lastError = error instanceof Error ? error.message : String(error);
+      return {};
+    } finally {
+      await rm(embedPath, { force: true }).catch(() => undefined);
+    }
+  }
+
   // Re-transcribes the growing buffer and updates the same row in place, so the UI
   // shows a fast partial line that refines as more audio arrives. No insights yet.
   private async updateInterim(): Promise<void> {
@@ -346,6 +388,8 @@ class CaptureRunner {
         return;
       }
 
+      // Write the transcript + run assist detection first so neither waits on the
+      // embedding model (a cold first-utterance load could otherwise stall the row).
       const finalMetadata = { captureSource: this.label, frames: frames.length };
       const id = utteranceId ?? (await prisma.transcriptUtterance.create({
         data: {
@@ -371,6 +415,16 @@ class CaptureRunner {
         text,
       });
       this.lastText = text;
+
+      // Then label the speaker and patch the row in place; the UI picks it up on its
+      // next poll. A miss leaves the line as an unlabelled "Participant".
+      const speaker = await this.classifySpeaker(frames);
+      if (speaker.speakerKey != null) {
+        await prisma.transcriptUtterance.update({
+          where: { id },
+          data: { engineMetadata: { ...finalMetadata, ...speaker } },
+        });
+      }
     } catch (error) {
       this.lastError = error instanceof Error ? error.message : String(error);
     } finally {
@@ -440,13 +494,15 @@ export async function startCapture(meetingId: string, options: StartCaptureOptio
 
   const capture = new MeetingCapture(meetingId);
   if (options.mic) {
+    // Mic is a single speaker (you), so no diarization needed.
     capture.runners.push(
-      new CaptureRunner(meetingId, "MIC", "microphone", options.mic, "SELF", "MIC"),
+      new CaptureRunner(meetingId, "MIC", "microphone", options.mic, "SELF", "MIC", false),
     );
   }
   if (options.meeting) {
+    // The "others" channel carries every remote participant — diarize it.
     capture.runners.push(
-      new CaptureRunner(meetingId, "MEETING", "meeting-audio", options.meeting, "OTHER", "LOOPBACK"),
+      new CaptureRunner(meetingId, "MEETING", "meeting-audio", options.meeting, "OTHER", "LOOPBACK", true),
     );
   }
 

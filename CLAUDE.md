@@ -92,7 +92,7 @@ Prompt templates in `packages/ai/src/prompts/` treat Teams messages as untrusted
 1. A `MeetingSession` is created from `/meetings` (or `POST /api/meetings`); the user opens `/meetings/[meetingId]` and clicks **Start listening** (no auto-start).
 2. `apps/web/src/lib/capture/manager.ts` spawns ffmpeg per source (mic and/or loopback), recording short 1.5s frames via the segment muxer.
 3. Each frame is classified speech/silence by peak volume (the silence gate doubles as a VAD). Consecutive speech frames are buffered; the buffer is re-transcribed every couple of frames as **interim** text (updating the same `TranscriptUtterance` row, flagged `engineMetadata.interim`), and **finalized** on a pause or ~24s cap.
-4. On finalize, `apps/web/src/lib/meeting-insights.ts` runs `detectMeetingAssistInsights` once and writes `MeetingInsight` rows. Real-time assist is **deterministic — no model call**.
+4. On finalize, `apps/web/src/lib/meeting-insights.ts` runs `detectMeetingAssistInsights` once and writes `MeetingInsight` rows. Real-time assist is **deterministic — no model call**. (Speaker diarization of the "others" channel is separate: it does run a local voice-embedding model per finalized utterance to assign a `Speaker N` label — see `docs/features/meeting-assistant.md`.)
 5. `LiveMeetingWorkspace` polls `GET /api/meetings/[id]` and `/capture` every 1.5s. Capture stops on **Stop listening**, session end, or page close (`pagehide`).
 
 Transcription is local (`whisper-cli`); raw audio chunks are deleted right after transcription. Full detail: `docs/features/meeting-assistant.md`.

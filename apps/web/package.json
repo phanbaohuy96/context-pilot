@@ -9,6 +9,7 @@
     "start": "next start"
   },
   "dependencies": {
+    "@huggingface/transformers": "^4.2.0",
     "@prisma/client": "^6.8.2",
     "@teams-observer/ai": "0.1.0",
     "@teams-observer/core": "0.1.0",
