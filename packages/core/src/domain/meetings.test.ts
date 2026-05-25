@@ -82,6 +82,23 @@ describe("meeting assist insight detection", () => {
     expect(action?.text).toBe("Likely action item: Please review the v1.5 spec for the U.S. launch before Friday.");
   });
 
+  it("drops filler words and ranks keywords by frequency", () => {
+    const insights = detectMeetingAssistInsights({
+      utteranceId: "utt_k",
+      speakerRole: "OTHER",
+      text: "Please review the migration plan, the migration window, and basically the migration owner before launch.",
+    });
+
+    const action = insights.find((insight) => insight.kind === "ACTION_ITEM");
+    // "migration" repeats three times, so it ranks first ahead of one-off terms.
+    expect(action?.keywords[0]).toBe("migration");
+    // Filler now excluded by the expanded stop list ("basically"/"before" were not in
+    // the original 16-word list); topical terms survive.
+    expect(action?.keywords).not.toContain("basically");
+    expect(action?.keywords).not.toContain("before");
+    expect(action?.keywords).toContain("owner");
+  });
+
   it("detects configured name mentions", () => {
     const insights = detectMeetingAssistInsights({
       utteranceId: "utt_3",

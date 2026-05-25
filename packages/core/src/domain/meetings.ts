@@ -192,31 +192,53 @@ function matchingSentences(text: string, patterns: RegExp[]): string {
     .join(" ");
 }
 
+// High-frequency function words and conversational filler (>= 4 chars; shorter words
+// are already excluded by the length floor). Kept deliberately to function words and
+// filler — not topical nouns/verbs — so the surviving keywords describe the subject.
+const KEYWORD_STOP_WORDS = new Set([
+  "about", "actually", "after", "again", "against", "almost", "already", "also",
+  "always", "among", "another", "anybody", "anymore", "anyone", "anything", "around",
+  "basically", "because", "been", "before", "being", "below", "between", "both",
+  "could", "definitely", "does", "doing", "done", "down", "during", "each", "else",
+  "even", "ever", "every", "everyone", "everything", "from", "gonna", "going", "gotta",
+  "have", "having", "here", "honestly", "into", "just", "keep", "kept", "kind", "kinda",
+  "know", "known", "knows", "like", "likely", "literally", "made", "make", "makes",
+  "making", "many", "maybe", "mean", "means", "might", "more", "most", "much", "must",
+  "obviously", "okay", "once", "only", "other", "over", "please", "pretty", "probably",
+  "quite", "rather", "really", "right", "said", "same", "says", "seem", "seems", "seen",
+  "should", "since", "some", "somebody", "someone", "something", "sort", "still",
+  "stuff", "such", "sure", "than", "that", "their", "them", "then", "there", "these",
+  "they", "thing", "things", "think", "this", "those", "though", "through", "trying",
+  "under", "until", "very", "want", "wanted", "wants", "well", "were", "what",
+  "whatever", "when", "where", "which", "while", "whole", "with", "without", "would",
+  "yeah", "your",
+]);
+
+// Topic-hint keywords for an assist card. Ranks by frequency (a word repeated across
+// the text is more likely the subject) then by first appearance, so the keywords are
+// the salient terms rather than just the earliest ones.
 function extractKeywords(text: string): string[] {
-  const stopWords = new Set([
-    "about",
-    "after",
-    "again",
-    "could",
-    "please",
-    "should",
-    "that",
-    "their",
-    "there",
-    "think",
-    "this",
-    "what",
-    "would",
-    "you",
-    "your",
-  ]);
-  const words = text
+  const seen = new Map<string, { count: number; firstIndex: number }>();
+  text
     .toLowerCase()
     .replaceAll(/[^a-z0-9\s-]/g, " ")
     .split(/\s+/)
-    .filter((word) => word.length >= 4 && !stopWords.has(word));
+    .forEach((word, index) => {
+      if (word.length < 4 || KEYWORD_STOP_WORDS.has(word)) {
+        return;
+      }
+      const existing = seen.get(word);
+      if (existing) {
+        existing.count += 1;
+      } else {
+        seen.set(word, { count: 1, firstIndex: index });
+      }
+    });
 
-  return Array.from(new Set(words)).slice(0, 6);
+  return Array.from(seen.entries())
+    .sort(([, a], [, b]) => b.count - a.count || a.firstIndex - b.firstIndex)
+    .slice(0, 6)
+    .map(([word]) => word);
 }
 
 function buildAnswerSuggestion(text: string, keywords: string[]): string {
