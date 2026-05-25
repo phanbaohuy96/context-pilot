@@ -1,0 +1,13 @@
+{
+  "name": "@teams-observer/ai",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@teams-observer/core": "0.1.0",
+    "zod": "^3.25.28"
+  }
+}

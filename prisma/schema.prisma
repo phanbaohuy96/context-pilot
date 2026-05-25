@@ -1,0 +1,334 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum SourceType {
+  TEAM_CHANNEL
+  GROUP_CHAT
+  CHAT
+}
+
+enum SourceStatus {
+  PENDING
+  APPROVED
+  PAUSED
+  DISABLED
+  ERROR
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  EXPIRING
+  DISABLED
+  ERROR
+}
+
+enum RequirementCategory {
+  BUSINESS_GOAL
+  USER_ROLE
+  WORKFLOW
+  FEATURE
+  CONSTRAINT
+  OPEN_QUESTION
+  RISK
+  ASSUMPTION
+}
+
+enum ReviewStatus {
+  NEW
+  CONFIRMED
+  REJECTED
+}
+
+enum AiProviderKind {
+  LOCAL_OPENAI
+  CLAUDE_CODE_CLI
+}
+
+enum MeetingPlatform {
+  TEAMS
+  GOOGLE_MEET
+  ZOOM
+  BROWSER
+  OTHER
+}
+
+enum MeetingStatus {
+  ACTIVE
+  ENDED
+  ERROR
+}
+
+enum MeetingSpeakerRole {
+  SELF
+  OTHER
+  UNKNOWN
+}
+
+enum MeetingSourceChannel {
+  MIC
+  LOOPBACK
+  MIXED
+  IMPORTED
+}
+
+enum MeetingInsightKind {
+  NOTE
+  QUESTION_FOR_YOU
+  NAME_MENTION
+  ACTION_ITEM
+  ANSWER_SUGGESTION
+}
+
+model Tenant {
+  id                String              @id @default(cuid())
+  azureTenantId     String              @unique
+  displayName       String
+  retentionDays     Int                 @default(180)
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  consentGrants     ConsentGrant[]
+  monitoredSources  MonitoredSource[]
+  meetingSessions   MeetingSession[]
+  auditLogs         AuditLog[]
+}
+
+model User {
+  id              String            @id @default(cuid())
+  entraObjectId   String?           @unique
+  email           String?           @unique
+  displayName     String
+  createdAt       DateTime          @default(now())
+  approvedSources MonitoredSource[] @relation("SourceApprover")
+  auditLogs       AuditLog[]
+  agentSessions   AgentSession[]
+}
+
+model ConsentGrant {
+  id          String   @id @default(cuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  scopes      String[]
+  grantedBy   String
+  grantedAt   DateTime @default(now())
+  expiresAt   DateTime?
+  rawJson      Json?
+}
+
+model MonitoredSource {
+  id             String              @id @default(cuid())
+  tenantId       String
+  tenant         Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  sourceType     SourceType
+  status         SourceStatus        @default(PENDING)
+  displayName    String
+  teamId         String?
+  channelId      String?
+  chatId         String?
+  graphResource  String?
+  approvedById   String?
+  approvedBy     User?               @relation("SourceApprover", fields: [approvedById], references: [id])
+  approvedAt     DateTime?
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+  subscriptions  GraphSubscription[]
+  messages       Message[]
+  summaries      ThreadSummary[]
+  requirements   Requirement[]
+  agentSessions  AgentSession[]
+  meetingSessions MeetingSession[]
+
+  @@index([tenantId, status])
+  @@index([sourceType, teamId, channelId, chatId])
+}
+
+model GraphSubscription {
+  id                      String             @id @default(cuid())
+  sourceId                String
+  source                  MonitoredSource    @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  graphSubscriptionId      String             @unique
+  resource                String
+  changeType              String             @default("created,updated")
+  notificationUrl         String
+  clientStateHash         String
+  status                  SubscriptionStatus @default(ACTIVE)
+  expiresAt               DateTime
+  lastNotificationAt      DateTime?
+  lastRenewedAt           DateTime?
+  lastError               String?
+  createdAt               DateTime           @default(now())
+  updatedAt               DateTime           @updatedAt
+
+  @@index([sourceId, status])
+  @@index([expiresAt])
+}
+
+model Message {
+  id                 String          @id @default(cuid())
+  sourceId           String
+  source             MonitoredSource @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  externalId         String
+  threadId           String
+  replyToId          String?
+  senderName         String?
+  senderId           String?
+  subject            String?
+  contentHtml        String?
+  contentText        String
+  webUrl             String?
+  sensitivityLabels  String[]        @default([])
+  createdAt          DateTime
+  updatedAt          DateTime        @updatedAt
+  receivedAt         DateTime        @default(now())
+  rawJson            Json
+
+  @@unique([sourceId, externalId])
+  @@index([sourceId, threadId])
+  @@index([createdAt])
+}
+
+model ThreadSummary {
+  id                 String         @id @default(cuid())
+  sourceId           String
+  source             MonitoredSource @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  threadId           String
+  summary            String
+  evidenceMessageIds String[]
+  provider           AiProviderKind
+  model              String
+  promptVersion      String
+  confidence         Float?
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
+
+  @@index([sourceId, threadId])
+}
+
+model Requirement {
+  id                 String              @id @default(cuid())
+  sourceId           String
+  source             MonitoredSource     @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  category           RequirementCategory
+  status             ReviewStatus        @default(NEW)
+  title              String
+  description        String
+  evidenceMessageIds String[]
+  priority           String?
+  notes              String?
+  provider           AiProviderKind?
+  model              String?
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+
+  @@index([sourceId, status])
+  @@index([category])
+}
+
+model AgentSession {
+  id                 String           @id @default(cuid())
+  userId             String?
+  user               User?            @relation(fields: [userId], references: [id])
+  sourceId           String?
+  source             MonitoredSource? @relation(fields: [sourceId], references: [id], onDelete: SetNull)
+  question           String
+  answer             String
+  provider           AiProviderKind
+  model              String
+  contextSummary     String?
+  evidenceMessageIds String[]
+  createdAt          DateTime         @default(now())
+
+  @@index([sourceId, createdAt])
+}
+
+model MeetingSession {
+  id                String                @id @default(cuid())
+  tenantId          String
+  tenant            Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  sourceId          String?
+  source            MonitoredSource?      @relation(fields: [sourceId], references: [id], onDelete: SetNull)
+  title             String
+  platform          MeetingPlatform       @default(OTHER)
+  status            MeetingStatus         @default(ACTIVE)
+  externalContextId String?
+  startedAt         DateTime              @default(now())
+  endedAt           DateTime?
+  createdAt         DateTime              @default(now())
+  updatedAt         DateTime              @updatedAt
+  utterances        TranscriptUtterance[]
+  insights          MeetingInsight[]
+  summaries         MeetingSummary[]
+
+  @@index([tenantId, status, startedAt])
+  @@index([sourceId, startedAt])
+}
+
+model TranscriptUtterance {
+  id               String               @id @default(cuid())
+  meetingSessionId String
+  meetingSession   MeetingSession       @relation(fields: [meetingSessionId], references: [id], onDelete: Cascade)
+  speakerRole      MeetingSpeakerRole   @default(UNKNOWN)
+  sourceChannel    MeetingSourceChannel @default(MIXED)
+  startedAt        DateTime
+  endedAt          DateTime?
+  text             String
+  confidence       Float?
+  engineMetadata   Json?
+  createdAt        DateTime             @default(now())
+
+  @@index([meetingSessionId, startedAt])
+}
+
+model MeetingInsight {
+  id                  String             @id @default(cuid())
+  meetingSessionId    String
+  meetingSession      MeetingSession     @relation(fields: [meetingSessionId], references: [id], onDelete: Cascade)
+  kind                MeetingInsightKind
+  text                String
+  keywords            String[]           @default([])
+  relatedUtteranceIds String[]           @default([])
+  provider            AiProviderKind?
+  model               String?
+  confidence          Float?
+  createdAt           DateTime           @default(now())
+  dismissedAt         DateTime?
+
+  @@index([meetingSessionId, kind, createdAt])
+}
+
+model MeetingSummary {
+  id               String         @id @default(cuid())
+  meetingSessionId String
+  meetingSession   MeetingSession @relation(fields: [meetingSessionId], references: [id], onDelete: Cascade)
+  summary          String
+  openQuestions    String[]       @default([])
+  actionItems      String[]       @default([])
+  provider         AiProviderKind
+  model            String
+  promptVersion    String
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+
+  @@index([meetingSessionId, createdAt])
+}
+
+model AuditLog {
+  id          String   @id @default(cuid())
+  tenantId    String?
+  tenant      Tenant?  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  userId      String?
+  user        User?    @relation(fields: [userId], references: [id])
+  action      String
+  targetType  String
+  targetId    String?
+  metadata    Json?
+  createdAt   DateTime @default(now())
+
+  @@index([tenantId, createdAt])
+  @@index([targetType, targetId])
+}
