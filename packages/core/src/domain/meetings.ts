@@ -53,6 +53,37 @@ export const ingestTranscriptUtteranceSchema = z
   );
 export type IngestTranscriptUtteranceInput = z.infer<typeof ingestTranscriptUtteranceSchema>;
 
+// Whisper (especially the tiny models used for local capture) emits a small set of
+// stock phrases when fed near-silent audio — a quiet mic picking up room noise gets
+// "transcribed" as one of these. Treat them as noise so they never reach the
+// transcript or assist detection.
+const HALLUCINATED_TRANSCRIPTIONS = new Set([
+  "you",
+  "thank you",
+  "thank you very much",
+  "thank you so much",
+  "thanks",
+  "thanks for watching",
+  "bye",
+  "bye bye",
+  "see you next time",
+]);
+
+// True when a transcription almost certainly came from silence/noise rather than
+// speech: either it is a known Whisper silence-hallucination phrase, or it has no
+// alphanumeric content at all (e.g. Whisper's "♪♪" music markers, bare punctuation).
+export function isLikelyHallucinatedTranscription(text: string): boolean {
+  const normalized = text
+    .toLowerCase()
+    .replaceAll(/[^a-z0-9\s]/g, " ")
+    .replaceAll(/\s+/g, " ")
+    .trim();
+  if (!normalized) {
+    return true;
+  }
+  return HALLUCINATED_TRANSCRIPTIONS.has(normalized);
+}
+
 export type MeetingAssistDetectionInput = {
   utteranceId: string;
   text: string;

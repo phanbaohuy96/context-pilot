@@ -4,6 +4,7 @@ import { mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import type { MeetingSourceChannel, MeetingSpeakerRole } from "@prisma/client";
+import { isLikelyHallucinatedTranscription } from "@teams-observer/core";
 import { prisma } from "@teams-observer/db";
 import { createDeterministicMeetingInsights } from "../meeting-insights";
 
@@ -282,7 +283,7 @@ class CaptureRunner {
     }
     try {
       const text = await this.transcribeFrames(this.speechFrames);
-      if (!text) {
+      if (!text || isLikelyHallucinatedTranscription(text)) {
         return;
       }
       if (this.currentUtteranceId) {
@@ -327,10 +328,11 @@ class CaptureRunner {
 
     try {
       const text = await this.transcribeFrames(frames);
-      if (!text) {
-        // The buffered audio transcribed to nothing (silence/noise). If an interim
-        // line was already shown for it, retract that row instead of leaving it
-        // stuck as "refining" forever.
+      if (!text || isLikelyHallucinatedTranscription(text)) {
+        // The buffered audio transcribed to nothing, or to a stock Whisper
+        // silence-hallucination phrase (a quiet mic picking up room noise). If an
+        // interim line was already shown for it, retract that row instead of leaving
+        // it stuck as "refining" forever.
         if (utteranceId) {
           await prisma.transcriptUtterance.delete({ where: { id: utteranceId } }).catch(() => undefined);
           this.utterances -= 1;

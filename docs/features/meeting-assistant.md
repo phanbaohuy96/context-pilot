@@ -84,12 +84,12 @@ Key parameters (in `apps/web/src/lib/capture/manager.ts`):
 - `MAX_UTTERANCE_FRAMES` — force-flush a long monologue at ~24s so latency stays bounded.
 - `INTERIM_EVERY_FRAMES = 2` — re-transcribe cadence; the first speech frame always shows immediately.
 - `MEETING_CAPTURE_SILENCE_MAX_DB` (default `-45`) — peak-volume floor below which a frame is treated as silence. Doubles as the VAD threshold.
-- Transcription: `whisper-cli -m <model> -f <wav> -nt -np`. Output is normalized to strip non-speech tags (`[...]`, `(...)`, `*...*`); empty results are skipped, so silence produces nothing.
+- Transcription: `whisper-cli -m <model> -f <wav> -nt -np`. Output is normalized to strip non-speech tags (`[...]`, `(...)`, `*...*`); empty results are skipped, so silence produces nothing. Output that `isLikelyHallucinatedTranscription` (in `packages/core`) flags as a stock Whisper silence-hallucination (e.g. `"Thank you."`, `"♪♪"` from a quiet mic) is also dropped as noise.
 
 ### Interim → final lifecycle
 
 - While speech accumulates, the same `TranscriptUtterance` row is **updated in place** with progressively longer (and self-correcting) text, flagged `engineMetadata.interim = true`. The UI shows a pulsing **● REFINING** badge and a dashed bubble.
-- On a pause (silent frame), max-length, or stop, the buffer is transcribed once more as the **final** text, the `interim` flag is cleared, and **assist detection runs once** on the complete text (avoids churning cards on partials).
+- On a pause (silent frame), max-length, or stop, the buffer is transcribed once more as the **final** text, the `interim` flag is cleared, and **assist detection runs once** on the complete text (avoids churning cards on partials). If that final text is empty or noise, any interim row already shown for it is **retracted** (deleted) rather than left stuck as "refining".
 - Raw frame files are deleted as soon as they're consumed; nothing audio is persisted.
 
 ## Assist cards (deterministic)

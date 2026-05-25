@@ -1,5 +1,24 @@
 import { describe, expect, it } from "vitest";
-import { detectMeetingAssistInsights } from "./meetings";
+import { detectMeetingAssistInsights, isLikelyHallucinatedTranscription } from "./meetings";
+
+describe("transcription noise filtering", () => {
+  it("flags Whisper silence-hallucination phrases regardless of punctuation/case", () => {
+    // A quiet mic produced these in a real capture; they carry no speech.
+    expect(isLikelyHallucinatedTranscription("Thank you.")).toBe(true);
+    expect(isLikelyHallucinatedTranscription("you")).toBe(true);
+    expect(isLikelyHallucinatedTranscription("Thanks for watching")).toBe(true);
+  });
+
+  it("flags symbol-only output such as Whisper music markers", () => {
+    expect(isLikelyHallucinatedTranscription("♪♪ ♪♪")).toBe(true);
+    expect(isLikelyHallucinatedTranscription("...")).toBe(true);
+  });
+
+  it("keeps real speech even when it contains a stock phrase as a substring", () => {
+    expect(isLikelyHallucinatedTranscription("Thank you all for the detailed update on the rollout.")).toBe(false);
+    expect(isLikelyHallucinatedTranscription("Cool, well said.")).toBe(false);
+  });
+});
 
 describe("meeting assist insight detection", () => {
   it("detects questions from other speakers and suggests a short reply", () => {
