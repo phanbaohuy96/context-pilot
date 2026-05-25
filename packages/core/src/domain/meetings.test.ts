@@ -33,6 +33,19 @@ describe("meeting assist insight detection", () => {
     expect(insights[1].text).toContain("Reply idea");
   });
 
+  it("surfaces only the question sentence from a multi-sentence utterance", () => {
+    // The whole utterance must NOT become the card body — only the actual question.
+    const insights = detectMeetingAssistInsights({
+      utteranceId: "utt_q",
+      speakerRole: "OTHER",
+      text: "We shipped the rollout yesterday. Are you comfortable with the timeline? I think it looks fine.",
+    });
+
+    const question = insights.find((insight) => insight.kind === "QUESTION_FOR_YOU");
+    expect(question?.text).toBe("Possible question for you: Are you comfortable with the timeline?");
+    expect(question?.text).not.toContain("rollout yesterday");
+  });
+
   it("detects likely action items", () => {
     const insights = detectMeetingAssistInsights({
       utteranceId: "utt_2",
@@ -42,6 +55,31 @@ describe("meeting assist insight detection", () => {
 
     expect(insights).toHaveLength(1);
     expect(insights[0]).toMatchObject({ kind: "ACTION_ITEM", relatedUtteranceIds: ["utt_2"] });
+  });
+
+  it("surfaces only the action sentence from a multi-sentence utterance", () => {
+    const insights = detectMeetingAssistInsights({
+      utteranceId: "utt_a",
+      speakerRole: "OTHER",
+      text: "Thanks for the demo. Please review the launch checklist before Friday. It was great work.",
+    });
+
+    const action = insights.find((insight) => insight.kind === "ACTION_ITEM");
+    expect(action?.text).toBe("Likely action item: Please review the launch checklist before Friday.");
+    expect(action?.text).not.toContain("great work");
+  });
+
+  it("does not split sentences on decimals or abbreviations in transcribed speech", () => {
+    // Version numbers / abbreviations are common in technical meetings; the matched
+    // clause must survive intact rather than truncate at "v1.".
+    const insights = detectMeetingAssistInsights({
+      utteranceId: "utt_v",
+      speakerRole: "OTHER",
+      text: "Please review the v1.5 spec for the U.S. launch before Friday. Thanks.",
+    });
+
+    const action = insights.find((insight) => insight.kind === "ACTION_ITEM");
+    expect(action?.text).toBe("Likely action item: Please review the v1.5 spec for the U.S. launch before Friday.");
   });
 
   it("detects configured name mentions", () => {

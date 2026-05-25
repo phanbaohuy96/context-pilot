@@ -128,27 +128,32 @@ export function detectMeetingAssistInsights(input: MeetingAssistDetectionInput):
   const keywords = extractKeywords(normalizedText);
 
   if (questionPatterns.some((pattern) => pattern.test(normalizedText))) {
+    // Surface just the question, not the whole multi-sentence utterance it was
+    // buried in, so the card reads as the actual thing being asked.
+    const questionText = matchingSentences(normalizedText, questionPatterns) || normalizedText;
+    const questionKeywords = extractKeywords(questionText);
     insights.push({
       kind: "QUESTION_FOR_YOU",
-      text: `Possible question for you: ${normalizedText}`,
-      keywords,
+      text: `Possible question for you: ${questionText}`,
+      keywords: questionKeywords,
       relatedUtteranceIds: [input.utteranceId],
-      confidence: normalizedText.includes("?") ? 0.85 : 0.72,
+      confidence: questionText.includes("?") ? 0.85 : 0.72,
     });
     insights.push({
       kind: "ANSWER_SUGGESTION",
-      text: buildAnswerSuggestion(normalizedText, keywords),
-      keywords,
+      text: buildAnswerSuggestion(questionText, questionKeywords),
+      keywords: questionKeywords,
       relatedUtteranceIds: [input.utteranceId],
       confidence: 0.64,
     });
   }
 
   if (actionPatterns.some((pattern) => pattern.test(normalizedText))) {
+    const actionText = matchingSentences(normalizedText, actionPatterns) || normalizedText;
     insights.push({
       kind: "ACTION_ITEM",
-      text: `Likely action item: ${normalizedText}`,
-      keywords,
+      text: `Likely action item: ${actionText}`,
+      keywords: extractKeywords(actionText),
       relatedUtteranceIds: [input.utteranceId],
       confidence: 0.74,
     });
@@ -166,6 +171,25 @@ export function detectMeetingAssistInsights(input: MeetingAssistDetectionInput):
   }
 
   return insights;
+}
+
+// Splits transcribed text into sentences, keeping a trailing fragment that has no
+// terminal punctuation (Whisper often cuts a final clause without a period). A
+// `.`/`!`/`?` only ends a sentence when followed by whitespace + a capital/opening
+// bracket or end of text, so decimals ("v1.5") and most abbreviations ("U.S.")
+// in transcribed speech aren't chopped mid-clause.
+function splitSentences(text: string): string[] {
+  return (text.match(/.+?(?:[.!?]+(?=\s+[A-Z("']|\s*$)|$)/g) ?? [text])
+    .map((sentence) => sentence.trim())
+    .filter(Boolean);
+}
+
+// Returns only the sentences that match one of the given patterns, joined back
+// together; empty when none match so the caller can fall back to the full text.
+function matchingSentences(text: string, patterns: RegExp[]): string {
+  return splitSentences(text)
+    .filter((sentence) => patterns.some((pattern) => pattern.test(sentence)))
+    .join(" ");
 }
 
 function extractKeywords(text: string): string[] {
