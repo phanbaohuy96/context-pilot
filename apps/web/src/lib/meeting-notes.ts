@@ -13,7 +13,9 @@ function providerKind(): AiProviderKind {
 }
 
 function notesEnabled(): boolean {
-  return process.env.MEETING_NOTES !== "false";
+  // Opt-in: notes send transcript text to an LLM provider, so they stay off unless
+  // explicitly enabled.
+  return process.env.MEETING_NOTES === "true";
 }
 
 type NotesState = { inFlight: boolean; lastCount: number };

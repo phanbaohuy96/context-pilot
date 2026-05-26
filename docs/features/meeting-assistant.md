@@ -113,11 +113,11 @@ These are code-driven (no model call) so they're fast and private.
 
 ## Rolling meeting notes (LLM)
 
-Separate from the deterministic assist cards, **synthesized notes** are produced by an LLM during the meeting (the assist path stays model-free):
+**Opt-in** (off by default; enable with `MEETING_NOTES="true"` — it sends transcript text to the configured LLM provider). Separate from the deterministic assist cards, **synthesized notes** are produced by an LLM during the meeting (the assist path stays model-free):
 
 - After a finalized utterance, the capture path calls `maybeGenerateMeetingNotes` (`apps/web/src/lib/meeting-notes.ts`), fire-and-forget. It is throttled per meeting (regenerates every `MEETING_NOTES_MIN_NEW_UTTERANCES` new finalized utterances, default 6) and serialized so the two capture channels can't run it concurrently.
 - It builds a transcript from the recent finalized utterances (with speaker labels) and calls `provider.summarizeMeeting` (`packages/ai`) to get `{ summary, openQuestions, actionItems }`, parsed by `parseMeetingNotes` (tolerant of code fences / surrounding prose). The result upserts the meeting's single rolling `MeetingSummary`.
-- Provider is the configured local LLM: `MEETING_NOTES_PROVIDER` = `LOCAL_OPENAI` (default; uses `LOCAL_AI_*`) or `CLAUDE_CODE_CLI` (uses `CLAUDE_CODE_*`). Disable entirely with `MEETING_NOTES=false`. Failures are logged and swallowed — they never disrupt capture or the transcript.
+- Enable with `MEETING_NOTES="true"` (off by default). Provider is the configured local LLM: `MEETING_NOTES_PROVIDER` = `LOCAL_OPENAI` (default; uses `LOCAL_AI_*`) or `CLAUDE_CODE_CLI` (uses `CLAUDE_CODE_*`). Failures are logged and swallowed — they never disrupt capture or the transcript.
 - The UI shows action items + open questions in the **Meeting notes** panel and the prose `summary` in the **Summaries** panel.
 
 ## API surface
