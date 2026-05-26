@@ -11,7 +11,7 @@ Because it captures **local audio** (microphone + system/loopback), it works wit
 | **MeetingSession** | One sitting. `ACTIVE` while in progress, `ENDED` after. Has a provider label and optional context id. |
 | **TranscriptUtterance** | One transcribed unit. `speakerRole` = `SELF` (your mic) / `OTHER` (others) / `UNKNOWN`; `sourceChannel` = `MIC` / `LOOPBACK` / `MIXED` / `IMPORTED`. `startedAt`/`endedAt` are audio-relative (derived from frame indices as an offset from capture start, so `endedAt - startedAt` is the real spoken duration); `confidence` is the mean whisper token probability. |
 | **MeetingInsight** | A deterministic assist card: `QUESTION_FOR_YOU`, `ANSWER_SUGGESTION`, `ACTION_ITEM`, `NAME_MENTION`, `NOTE`. |
-| **MeetingSummary** | Reserved for end-of-meeting summaries (open questions / action items). |
+| **MeetingSummary** | Rolling LLM notes for a meeting: `summary` + `openQuestions` + `actionItems`. Regenerated during the meeting (one row, updated in place). |
 
 ## Capture: two paths
 
@@ -109,7 +109,16 @@ Key parameters (in `apps/web/src/lib/capture/manager.ts`):
 - **ACTION_ITEM** — phrases like "can you", "could you", "please", "you need to".
 - **NAME_MENTION** — when your configured name appears.
 
-These are code-driven (no model call) so they're fast and private. A local LLM pass (`analyzeMeetingWindow`) and end-of-meeting `MeetingSummary` generation are natural next steps.
+These are code-driven (no model call) so they're fast and private.
+
+## Rolling meeting notes (LLM)
+
+Separate from the deterministic assist cards, **synthesized notes** are produced by an LLM during the meeting (the assist path stays model-free):
+
+- After a finalized utterance, the capture path calls `maybeGenerateMeetingNotes` (`apps/web/src/lib/meeting-notes.ts`), fire-and-forget. It is throttled per meeting (regenerates every `MEETING_NOTES_MIN_NEW_UTTERANCES` new finalized utterances, default 6) and serialized so the two capture channels can't run it concurrently.
+- It builds a transcript from the recent finalized utterances (with speaker labels) and calls `provider.summarizeMeeting` (`packages/ai`) to get `{ summary, openQuestions, actionItems }`, parsed by `parseMeetingNotes` (tolerant of code fences / surrounding prose). The result upserts the meeting's single rolling `MeetingSummary`.
+- Provider is the configured local LLM: `MEETING_NOTES_PROVIDER` = `LOCAL_OPENAI` (default; uses `LOCAL_AI_*`) or `CLAUDE_CODE_CLI` (uses `CLAUDE_CODE_*`). Disable entirely with `MEETING_NOTES=false`. Failures are logged and swallowed — they never disrupt capture or the transcript.
+- The UI shows action items + open questions in the **Meeting notes** panel and the prose `summary` in the **Summaries** panel.
 
 ## API surface
 

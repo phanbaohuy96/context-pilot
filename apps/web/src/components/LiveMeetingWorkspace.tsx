@@ -31,6 +31,8 @@ type Insight = {
 type Summary = {
   id: string;
   summary: string;
+  openQuestions: string[];
+  actionItems: string[];
   model: string;
   createdAt: string;
 };
@@ -234,7 +236,9 @@ export function LiveMeetingWorkspace({
   }
 
   const latestCaption = useMemo(() => utterances[utterances.length - 1], [utterances]);
-  const rollingNotes = useMemo(() => buildRollingNotes(utterances), [utterances]);
+  // Synthesized rolling notes come from the latest MeetingSummary (newest first).
+  const latestNotes = summaries[0];
+  const hasNotes = Boolean(latestNotes && (latestNotes.actionItems.length || latestNotes.openQuestions.length));
   const latestInsights = insights.slice(0, 6);
   const transcriptFeedRef = useRef<HTMLDivElement>(null);
 
@@ -264,12 +268,27 @@ export function LiveMeetingWorkspace({
 
         <section className="card stack">
           <h3>Meeting notes</h3>
-          {rollingNotes.length ? (
-            <ul>
-              {rollingNotes.map((note) => <li key={note}>{note}</li>)}
-            </ul>
+          {hasNotes ? (
+            <>
+              {latestNotes.actionItems.length ? (
+                <div>
+                  <p className="muted">Action items</p>
+                  <ul>
+                    {latestNotes.actionItems.map((item) => <li key={item}>{item}</li>)}
+                  </ul>
+                </div>
+              ) : null}
+              {latestNotes.openQuestions.length ? (
+                <div>
+                  <p className="muted">Open questions</p>
+                  <ul>
+                    {latestNotes.openQuestions.map((question) => <li key={question}>{question}</li>)}
+                  </ul>
+                </div>
+              ) : null}
+            </>
           ) : (
-            <p className="muted">Notes will appear from transcript highlights. LLM summaries can be added next.</p>
+            <p className="muted">Synthesized action items and open questions will appear here once enough of the meeting has been transcribed.</p>
           )}
         </section>
       </section>
@@ -438,14 +457,6 @@ function displaySpeaker(utterance: Utterance): string {
 
 function sourceLabel(source: CaptureSourceStatus): string {
   return source.source === "MIC" ? "Microphone" : "Meeting audio";
-}
-
-function buildRollingNotes(utterances: Utterance[]): string[] {
-  return utterances
-    .filter((utterance) => utterance.speakerRole !== "SELF")
-    .map((utterance) => utterance.text)
-    .filter((text) => text.length > 40)
-    .slice(-5);
 }
 
 function formatInsightKind(kind: string): string {

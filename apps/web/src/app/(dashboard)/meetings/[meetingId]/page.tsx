@@ -104,6 +104,8 @@ export default async function MeetingWorkspacePage({ params }: MeetingWorkspaceP
         initialSummaries={meeting.summaries.map((summary) => ({
           id: summary.id,
           summary: summary.summary,
+          openQuestions: summary.openQuestions,
+          actionItems: summary.actionItems,
           model: summary.model,
           createdAt: summary.createdAt.toISOString(),
         }))}

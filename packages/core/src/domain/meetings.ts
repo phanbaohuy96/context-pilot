@@ -105,6 +105,21 @@ export function meanTokenConfidence(segments: TranscriptionSegment[]): number | 
   return count ? Math.min(1, Math.max(0, sum / count)) : undefined;
 }
 
+// Synthesized rolling meeting notes (LLM output). Arrays default to empty so a model
+// that omits a field still parses.
+export const meetingNotesSchema = z.object({
+  summary: z.string().trim().default(""),
+  openQuestions: z.array(z.string().trim().min(1)).default([]),
+  actionItems: z.array(z.string().trim().min(1)).default([]),
+});
+export type MeetingNotes = z.infer<typeof meetingNotesSchema>;
+
+export type MeetingTranscriptLine = { speaker: string; text: string };
+export type MeetingNotesContext = {
+  title?: string;
+  transcript: MeetingTranscriptLine[];
+};
+
 export type MeetingAssistDetectionInput = {
   utteranceId: string;
   text: string;

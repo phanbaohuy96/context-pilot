@@ -15,6 +15,7 @@ import {
 } from "@teams-observer/core";
 import { prisma } from "@teams-observer/db";
 import { createDeterministicMeetingInsights } from "../meeting-insights";
+import { maybeGenerateMeetingNotes } from "../meeting-notes";
 import { embedSpeaker, speakerSimilarityThreshold, warmupDiarizer } from "./diarizer";
 
 // Short frames are the VAD resolution: each is classified speech/silence, then
@@ -485,6 +486,9 @@ class CaptureRunner {
           data: { engineMetadata: { ...finalMetadata, ...speaker } },
         });
       }
+
+      // Refresh the rolling LLM notes off the capture path (throttled per meeting).
+      void maybeGenerateMeetingNotes(this.meetingId);
     } catch (error) {
       this.lastError = error instanceof Error ? error.message : String(error);
     } finally {

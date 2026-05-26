@@ -1,9 +1,10 @@
-import type { AgentAnswer, AgentContextBundle } from "@teams-observer/core";
+import type { AgentAnswer, AgentContextBundle, MeetingNotesContext } from "@teams-observer/core";
 import { buildAnswerPrompt } from "../prompts/answer";
+import { buildMeetingNotesPrompt } from "../prompts/meeting-notes";
 import { buildRequirementsPrompt } from "../prompts/requirements";
 import { buildSummarizePrompt } from "../prompts/summarize";
-import { parseRequirementExtraction } from "../json";
-import type { AiProvider, RequirementExtractionResult, ThreadSummaryResult } from "../provider";
+import { parseMeetingNotes, parseRequirementExtraction } from "../json";
+import type { AiProvider, MeetingNotesResult, RequirementExtractionResult, ThreadSummaryResult } from "../provider";
 
 export type LocalOpenAiProviderConfig = {
   baseUrl: string;
@@ -50,6 +51,12 @@ export class LocalOpenAiProvider implements AiProvider {
       evidenceMessageIds: input.messages.map((message) => message.id),
       model: this.model,
     };
+  }
+
+  async summarizeMeeting(input: MeetingNotesContext): Promise<MeetingNotesResult> {
+    const text = await this.complete(buildMeetingNotesPrompt(input), { json: true });
+    const parsed = parseMeetingNotes(text);
+    return { ...parsed, model: this.model };
   }
 
   private async complete(prompt: string, options: { json?: boolean } = {}): Promise<string> {
