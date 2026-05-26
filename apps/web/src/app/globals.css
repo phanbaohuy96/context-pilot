@@ -1031,6 +1031,76 @@ p.assist-question {
   font-family: var(--font-mono);
   font-size: 11px;
   color: var(--muted);
+  margin-top: 14px;
+}
+
+.notes-body {
+  display: grid;
+  gap: 16px;
+  align-content: start;
+}
+
+/* ----------------------------------------------- Full-height workspace ---- */
+/* On the meeting workspace route (scoped via .main.full-height) the view fills
+   the viewport and each panel scrolls internally, instead of the whole page. */
+
+@media (min-width: 1081px) {
+  .main.full-height {
+    height: 100vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    padding-bottom: 28px;
+  }
+
+  .main.full-height .live-workspace {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+  }
+
+  .main.full-height .console-bar,
+  .main.full-height .console-strip {
+    flex: none;
+  }
+
+  .main.full-height .workspace-split {
+    flex: 1;
+    min-height: 0;
+    /* Default 2-area layout: bound both rows so each panel scrolls. */
+    grid-template-rows: minmax(0, 1.5fr) minmax(0, 1fr);
+  }
+
+  .main.full-height .workspace-split > .card {
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* The header within each panel stays put; the body fills and scrolls. */
+  .main.full-height .transcript-head,
+  .main.full-height .rail-eyebrow {
+    flex: none;
+  }
+
+  .main.full-height .transcript-feed,
+  .main.full-height .assist-feed,
+  .main.full-height .notes-body {
+    flex: 1;
+    min-height: 0;
+    max-height: none;
+    overflow-y: auto;
+  }
+}
+
+/* Wide: the workspace is a single row of three columns. */
+@media (min-width: 1560px) {
+  .main.full-height .workspace-split {
+    grid-template-rows: minmax(0, 1fr);
+  }
 }
 
 /* ------------------------------------------------------- Transcript card -- */
@@ -1054,6 +1124,111 @@ p.assist-question {
   display: flex;
   align-items: center;
   gap: 10px;
+}
+
+.speaker-diarize-card {
+  align-items: center;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: linear-gradient(135deg, rgba(124, 198, 255, 0.08), rgba(255, 184, 77, 0.05));
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  margin-bottom: 14px;
+  padding: 12px;
+}
+
+.speaker-diarize-card div {
+  display: grid;
+  gap: 4px;
+}
+
+.speaker-diarize-card p {
+  color: var(--muted);
+  font-size: 12.5px;
+  line-height: 1.4;
+  margin: 0;
+}
+
+.speaker-diarize-kicker {
+  color: var(--info);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.speaker-name-button {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  color: var(--fg-soft);
+  gap: 7px;
+  justify-content: flex-start;
+  padding: 0;
+  text-align: left;
+}
+
+.speaker-name-button:hover {
+  background: transparent;
+  box-shadow: none;
+  color: var(--accent-2);
+  filter: none;
+  transform: none;
+}
+
+.speaker-name-button span {
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  padding: 1px 5px;
+  text-transform: uppercase;
+}
+
+.inline-speaker-form {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.inline-speaker-form input {
+  background: var(--bg);
+  border: 1px solid var(--accent-line);
+  border-radius: 8px;
+  color: var(--fg);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  min-width: 160px;
+  padding: 6px 8px;
+  text-transform: none;
+}
+
+.inline-speaker-form button {
+  font-size: 11px;
+  padding: 6px 8px;
+}
+
+.inline-speaker-form .inline-speaker-cancel {
+  background: transparent;
+  border: 1px solid var(--border-strong);
+  box-shadow: none;
+  color: var(--muted);
+}
+
+.speaker-error {
+  color: var(--danger);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  margin: 0;
+}
+
+.inline-speaker-error {
+  margin: -6px 0 10px;
 }
 
 .transcript-feed {

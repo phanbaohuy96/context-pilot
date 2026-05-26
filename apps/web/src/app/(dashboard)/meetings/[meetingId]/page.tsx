@@ -1,8 +1,10 @@
 import { revalidatePath } from "next/cache";
 import { notFound } from "next/navigation";
+import { speakerAliasFromMetadata, speakerKeyFromMetadata, speakerLabelFromMetadata } from "@teams-observer/core";
 import { prisma } from "@teams-observer/db";
 import { stopCapture } from "../../../../lib/capture/manager";
 import { LiveMeetingWorkspace } from "../../../../components/LiveMeetingWorkspace";
+import { importedMediaFileName } from "../../../../lib/imported-diarization";
 
 export const dynamic = "force-dynamic";
 
@@ -66,7 +68,6 @@ export default async function MeetingWorkspacePage({ params }: MeetingWorkspaceP
       <header className="page-header meeting-header">
         <div>
           <h2>{meeting.title}</h2>
-          <p>Listen to any meeting provider, show live captions, capture notes, and suggest private replies.</p>
         </div>
         <form action={endMeeting}>
           <input type="hidden" name="meetingId" value={meeting.id} />
@@ -81,6 +82,7 @@ export default async function MeetingWorkspacePage({ params }: MeetingWorkspaceP
         startedLabel={meeting.startedAt.toISOString().slice(0, 16).replace("T", " ")}
         audioSource={meeting.externalContextId ?? "mic + meeting audio"}
         linkedSource={meeting.source?.displayName ?? null}
+        importMediaFile={importedMediaFileName(meeting.externalContextId)}
         initialUtterances={meeting.utterances.map((utterance) => ({
           id: utterance.id,
           speakerRole: utterance.speakerRole,
@@ -88,7 +90,9 @@ export default async function MeetingWorkspacePage({ params }: MeetingWorkspaceP
           startedAt: utterance.startedAt.toISOString(),
           text: utterance.text,
           interim: (utterance.engineMetadata as { interim?: boolean } | null)?.interim === true,
-          speakerLabel: (utterance.engineMetadata as { speakerLabel?: string } | null)?.speakerLabel,
+          speakerKey: speakerKeyFromMetadata(utterance.engineMetadata),
+          speakerLabel: speakerLabelFromMetadata(utterance.engineMetadata),
+          speakerAlias: speakerAliasFromMetadata(utterance.engineMetadata),
         }))}
         initialInsights={meeting.insights.map((insight) => ({
           id: insight.id,

@@ -1,5 +1,10 @@
 import { createAiProvider, promptVersion, type AiProviderKind } from "@teams-observer/ai";
-import type { MeetingTranscriptLine } from "@teams-observer/core";
+import {
+  speakerAliasFromMetadata,
+  speakerKeyFromMetadata,
+  speakerLabelFromMetadata,
+  type MeetingTranscriptLine,
+} from "@teams-observer/core";
 import { prisma } from "@teams-observer/db";
 import type { TranscriptUtterance } from "@prisma/client";
 
@@ -21,12 +26,28 @@ function notesEnabled(): boolean {
 type NotesState = { inFlight: boolean; lastCount: number };
 const states = new Map<string, NotesState>();
 
-function speakerName(utterance: TranscriptUtterance): string {
+function buildSpeakerAliases(utterances: TranscriptUtterance[]): Record<number, string> {
+  const aliases: Record<number, string> = {};
+  for (const utterance of utterances) {
+    const key = speakerKeyFromMetadata(utterance.engineMetadata);
+    const alias = speakerAliasFromMetadata(utterance.engineMetadata);
+    if (key && alias) {
+      aliases[key] = alias;
+    }
+  }
+  return aliases;
+}
+
+function speakerName(utterance: TranscriptUtterance, aliases: Record<number, string>): string {
   if (utterance.speakerRole === "SELF") {
     return "You";
   }
   if (utterance.speakerRole === "OTHER") {
-    return (utterance.engineMetadata as { speakerLabel?: string } | null)?.speakerLabel ?? "Participant";
+    const key = speakerKeyFromMetadata(utterance.engineMetadata);
+    return (key ? aliases[key] : undefined)
+      ?? speakerAliasFromMetadata(utterance.engineMetadata)
+      ?? speakerLabelFromMetadata(utterance.engineMetadata)
+      ?? "Participant";
   }
   return "Speaker";
 }
@@ -63,9 +84,10 @@ export async function maybeGenerateMeetingNotes(meetingId: string): Promise<void
     // hammer a down provider.
     state.lastCount = finals.length;
 
+    const aliases = buildSpeakerAliases(finals);
     const transcript: MeetingTranscriptLine[] = finals
       .slice(-MAX_TRANSCRIPT_LINES)
-      .map((utterance) => ({ speaker: speakerName(utterance), text: utterance.text }));
+      .map((utterance) => ({ speaker: speakerName(utterance, aliases), text: utterance.text }));
     const meeting = await prisma.meetingSession.findUnique({ where: { id: meetingId } });
     if (!meeting) {
       return;

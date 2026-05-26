@@ -83,8 +83,8 @@ export function warmupDiarizer(): void {
 // Returns a 512-d speaker embedding for the utterance audio, or null when diarization
 // is disabled. Throws if the model is enabled but fails to load/run, so the caller can
 // record the error and continue without a speaker label.
-export async function embedSpeaker(wavPath: string): Promise<number[] | null> {
-  if (!diarizationEnabled()) {
+export async function embedSpeaker(wavPath: string, options: { force?: boolean } = {}): Promise<number[] | null> {
+  if (!options.force && !diarizationEnabled()) {
     return null;
   }
   const loaded = await load();

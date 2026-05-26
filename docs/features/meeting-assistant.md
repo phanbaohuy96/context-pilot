@@ -94,12 +94,14 @@ Key parameters (in `apps/web/src/lib/capture/manager.ts`):
 
 ### Speaker diarization (others channel)
 
-**Opt-in** (off by default; enable with `MEETING_CAPTURE_DIARIZATION="true"` — it downloads a model on first use). The mic channel is a single speaker (you → `SELF`). The **others** channel carries every remote participant, so when enabled each finalized utterance there is grouped into a stable per-meeting **Speaker N** identity:
+**Opt-in for live capture** (off by default; enable with `MEETING_CAPTURE_DIARIZATION="true"` — it downloads a model on first use). The mic channel is a single speaker (you → `SELF`). The **others** channel carries every remote participant, so when enabled each finalized utterance there is grouped into a stable per-meeting **Speaker N** identity. Imported recordings can also be post-processed explicitly with `POST /api/meetings/[id]/speakers/diarize`, which requires the meeting's `externalContextId` to name the same ignored `tmp/` media file, slices imported remote utterances by their timestamps, and applies the same local embedding/clustering flow.
 
-- `apps/web/src/lib/capture/diarizer.ts` embeds the utterance audio with a local ONNX speaker model (`Xenova/wavlm-base-plus-sv`, run via `@huggingface/transformers`/onnxruntime, downloaded to the model cache on first use).
+- `apps/web/src/lib/capture/diarizer.ts` embeds utterance audio with a local ONNX speaker model (`Xenova/wavlm-base-plus-sv`, run via `@huggingface/transformers`/onnxruntime, downloaded to the model cache on first use).
 - `assignSpeaker` in `packages/core/src/domain/diarization.ts` does the grouping: cosine-compare the embedding to each existing speaker centroid, join the best match above the similarity threshold, else start a new speaker. Pure and deterministic — only the embedding is a model call.
 - The label is stored on the utterance's `engineMetadata.speakerLabel` (no schema change) and shown in the transcript; `speakerKey` is the 1-based id.
-- Accuracy is **approximate** — short turns and similar voices on mono 16 kHz audio can be mislabeled. Tuning: `MEETING_CAPTURE_DIARIZATION` (`"true"` to enable; off otherwise), `MEETING_DIARIZATION_SIMILARITY_THRESHOLD` (default `0.86`; higher splits a speaker, lower merges speakers), `MEETING_DIARIZATION_MODEL`, `MEETING_DIARIZATION_MODEL_CACHE`. If the model fails to load, the utterance is still saved (just without a speaker label).
+- The transcript UI exposes discovered `Speaker N` labels directly in transcript rows. Without real diarization metadata, remote audio stays as plain `Participant`; the UI can offer a manual diarization action, but it does not present fake numbered participants as renameable speakers.
+- Renaming a real diarized voice happens inline from a transcript row and writes `engineMetadata.speakerAlias` to matching existing utterances; later transcript rendering and rolling notes prefer alias → diarized label → role fallback.
+- Accuracy is **approximate** — short turns and similar voices on mono 16 kHz audio can be mislabeled. Tuning: `MEETING_CAPTURE_DIARIZATION` (`"true"` to enable live diarization; off otherwise), `MEETING_DIARIZATION_SIMILARITY_THRESHOLD` (default `0.86`; higher splits a speaker, lower merges speakers), `MEETING_DIARIZATION_MODEL`, `MEETING_DIARIZATION_MODEL_CACHE`. If the model fails to load, the utterance is still saved (just without a speaker label).
 
 ## Assist cards (deterministic)
 
@@ -130,6 +132,8 @@ These are code-driven (no model call) so they're fast and private.
 | `PATCH /api/meetings/[id]` | End a session (`status: ENDED`), writes an audit log. |
 | `POST /api/meetings/[id]/utterances` | Ingest a transcript utterance (`ingestTranscriptUtteranceSchema`); used by the CLI. |
 | `GET/POST/DELETE /api/meetings/[id]/capture` | Capture status / start / stop (server-managed). |
+| `PATCH /api/meetings/[id]/speakers` | Rename a diarized speaker key for the meeting transcript. |
+| `POST /api/meetings/[id]/speakers/diarize` | Post-process a linked imported local recording into diarized speaker keys. |
 | `GET /api/meetings/devices` | List macOS audio input devices (ffmpeg avfoundation). |
 
 ## UI (`LiveMeetingWorkspace`)

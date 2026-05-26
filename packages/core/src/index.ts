@@ -2,6 +2,7 @@ export * from "./domain/agent";
 export * from "./domain/diarization";
 export * from "./domain/meetings";
 export * from "./domain/messages";
+export * from "./domain/speaker-metadata";
 export * from "./domain/requirements";
 export * from "./domain/sources";
 export * from "./policies/monitoring";

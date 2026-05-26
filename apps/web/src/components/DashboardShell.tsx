@@ -1,5 +1,6 @@
 "use client";
 
+import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Nav } from "./Nav";
 
@@ -11,6 +12,10 @@ const STORAGE_KEY = "nav-collapsed";
 // stored preference is applied in an effect, after hydration.
 export function DashboardShell({ children }: { children: React.ReactNode }) {
   const [collapsed, setCollapsed] = useState(true);
+  const pathname = usePathname() ?? "";
+  // The meeting workspace (/meetings/<id>, not the list) runs as a fixed-height
+  // app view: the panels scroll internally instead of the whole page.
+  const fullHeight = /^\/meetings\/[^/]+$/.test(pathname);
 
   useEffect(() => {
     const saved = window.localStorage.getItem(STORAGE_KEY);
@@ -30,7 +35,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
   return (
     <div className={`shell${collapsed ? "" : " expanded"}`}>
       <Nav collapsed={collapsed} onToggle={toggle} />
-      <main className="main">{children}</main>
+      <main className={`main${fullHeight ? " full-height" : ""}`}>{children}</main>
     </div>
   );
 }

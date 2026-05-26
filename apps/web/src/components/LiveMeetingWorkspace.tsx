@@ -13,11 +13,13 @@ type Utterance = {
   startedAt: string;
   text: string;
   interim?: boolean;
+  speakerKey?: number;
   speakerLabel?: string;
+  speakerAlias?: string;
 };
 
-type RawUtterance = Omit<Utterance, "interim" | "speakerLabel"> & {
-  engineMetadata?: { interim?: boolean; speakerLabel?: string } | null;
+type RawUtterance = Omit<Utterance, "interim" | "speakerKey" | "speakerLabel" | "speakerAlias"> & {
+  engineMetadata?: { interim?: boolean; speakerKey?: number; speakerLabel?: string; speakerAlias?: string } | null;
 };
 
 type Insight = {
@@ -67,7 +69,9 @@ function toUtterance(raw: RawUtterance): Utterance {
     startedAt: raw.startedAt,
     text: raw.text,
     interim: raw.engineMetadata?.interim === true,
+    speakerKey: raw.engineMetadata?.speakerKey,
     speakerLabel: raw.engineMetadata?.speakerLabel,
+    speakerAlias: raw.engineMetadata?.speakerAlias,
   };
 }
 
@@ -97,6 +101,7 @@ type LiveMeetingWorkspaceProps = {
   startedLabel: string;
   audioSource: string;
   linkedSource: string | null;
+  importMediaFile: string | null;
   initialUtterances: Utterance[];
   initialInsights: Insight[];
   initialSummaries: Summary[];
@@ -109,6 +114,7 @@ export function LiveMeetingWorkspace({
   startedLabel,
   audioSource,
   linkedSource,
+  importMediaFile,
   initialUtterances,
   initialInsights,
   initialSummaries,
@@ -124,6 +130,12 @@ export function LiveMeetingWorkspace({
   const [capture, setCapture] = useState<CaptureStatus | null>(null);
   const [captureError, setCaptureError] = useState("");
   const [capturePending, setCapturePending] = useState(false);
+  const [speakerDrafts, setSpeakerDrafts] = useState<Record<number, string>>({});
+  const [editingSpeaker, setEditingSpeaker] = useState<{ key: number; utteranceId: string } | null>(null);
+  const [savingSpeakerKey, setSavingSpeakerKey] = useState<number | null>(null);
+  const [speakerError, setSpeakerError] = useState("");
+  const [diarizePending, setDiarizePending] = useState(false);
+  const [diarizeError, setDiarizeError] = useState("");
 
   const capturingRef = useRef(false);
   const active = meetingStatus === "ACTIVE";
@@ -257,6 +269,90 @@ export function LiveMeetingWorkspace({
     }
   }
 
+  const speakerAliases = useMemo(() => buildSpeakerAliases(utterances), [utterances]);
+  const hasDiarizedSpeakers = utterances.some((utterance) => Boolean(speakerIdentityKey(utterance)));
+  const hasImportedRemoteUtterances = utterances.some((utterance) => utterance.speakerRole === "OTHER" && utterance.sourceChannel === "IMPORTED");
+  const canDiarize = Boolean(importMediaFile) && hasImportedRemoteUtterances && !hasDiarizedSpeakers;
+
+  async function runDiarization(): Promise<void> {
+    setDiarizeError("");
+    if (!importMediaFile) {
+      setDiarizeError("This meeting is not linked to an imported recording.");
+      return;
+    }
+    setDiarizePending(true);
+    try {
+      const result = await fetch(`/api/meetings/${meetingId}/speakers/diarize`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mediaFile: importMediaFile }),
+      });
+      const body = await result.json().catch(() => ({}));
+      if (!result.ok) {
+        setDiarizeError(body.error ?? "Could not diarize speakers.");
+        return;
+      }
+      await refresh();
+    } catch (error) {
+      setDiarizeError(error instanceof Error ? error.message : "Could not diarize speakers.");
+    } finally {
+      setDiarizePending(false);
+    }
+  }
+
+  function beginRenameSpeaker(utterance: Utterance): void {
+    const speakerKey = utterance.speakerKey;
+    if (!speakerKey) {
+      return;
+    }
+    setSpeakerError("");
+    setEditingSpeaker({ key: speakerKey, utteranceId: utterance.id });
+    setSpeakerDrafts((current) => ({
+      ...current,
+      [speakerKey]: speakerAliases[speakerKey] ?? "",
+    }));
+  }
+
+  function cancelRenameSpeaker(speakerKey: number): void {
+    setEditingSpeaker(null);
+    setSpeakerDrafts((current) => {
+      const next = { ...current };
+      delete next[speakerKey];
+      return next;
+    });
+  }
+
+  async function renameSpeaker(speakerKey: number): Promise<void> {
+    const alias = (speakerDrafts[speakerKey] ?? speakerAliases[speakerKey] ?? "").trim();
+    setSpeakerError("");
+    setSavingSpeakerKey(speakerKey);
+    try {
+      const result = await fetch(`/api/meetings/${meetingId}/speakers`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ speakerKey, alias }),
+      });
+      const body = await result.json().catch(() => ({}));
+      if (!result.ok) {
+        setSpeakerError(body.error ?? "Could not rename speaker.");
+        return;
+      }
+      setUtterances((current) => current.map((utterance) => utterance.speakerKey === speakerKey
+        ? { ...utterance, speakerAlias: alias || undefined }
+        : utterance));
+      setEditingSpeaker(null);
+      setSpeakerDrafts((current) => {
+        const next = { ...current };
+        delete next[speakerKey];
+        return next;
+      });
+    } catch (error) {
+      setSpeakerError(error instanceof Error ? error.message : "Could not rename speaker.");
+    } finally {
+      setSavingSpeakerKey(null);
+    }
+  }
+
   const latestCaption = useMemo(() => utterances[utterances.length - 1], [utterances]);
   // Synthesized rolling notes come from the latest MeetingSummary (newest first).
   const latestNotes = summaries[0];
@@ -321,7 +417,7 @@ export function LiveMeetingWorkspace({
           </span>
           <span className="console-ticker" title={latestCaption?.text}>
             {latestCaption ? (
-              <><span className="console-ticker-who">{displaySpeaker(latestCaption)}:</span> {latestCaption.text}</>
+              <><span className="console-ticker-who">{displaySpeaker(latestCaption, speakerAliases)}:</span> {latestCaption.text}</>
             ) : (
               <span className="muted">Start listening to caption the meeting audio or your microphone.</span>
             )}
@@ -388,6 +484,19 @@ export function LiveMeetingWorkspace({
             </h3>
             <span className="rail-count">{utterances.length} lines</span>
           </div>
+          {canDiarize ? (
+            <div className="speaker-diarize-card" aria-label="Speaker diarization">
+              <div>
+                <span className="speaker-diarize-kicker">Diarization</span>
+                <p>Remote audio is not separated yet. Run local diarization to discover speaker labels.</p>
+              </div>
+              <button type="button" className="secondary" onClick={() => void runDiarization()} disabled={diarizePending}>
+                {diarizePending ? "Diarizing..." : "Diarize speakers"}
+              </button>
+              {diarizeError ? <p className="speaker-error">{diarizeError}</p> : null}
+            </div>
+          ) : null}
+          {speakerError ? <p className="speaker-error inline-speaker-error">{speakerError}</p> : null}
           <div className="transcript-feed" ref={transcriptFeedRef}>
             {utterances.length ? utterances.map((utterance) => (
               <article
@@ -395,7 +504,37 @@ export function LiveMeetingWorkspace({
                 className={`bubble ${utterance.speakerRole === "SELF" ? "bubble-self" : "bubble-other"}${utterance.interim ? " bubble-interim" : ""}`}
               >
                 <header className="bubble-head">
-                  <span className="bubble-speaker">{displaySpeaker(utterance)}</span>
+                  {utterance.speakerKey && utterance.speakerRole !== "SELF" && editingSpeaker?.key === utterance.speakerKey && editingSpeaker.utteranceId === utterance.id ? (
+                    <form
+                      className="inline-speaker-form"
+                      onSubmit={(event) => {
+                        event.preventDefault();
+                        void renameSpeaker(utterance.speakerKey as number);
+                      }}
+                    >
+                      <input
+                        aria-label={`Rename ${utterance.speakerLabel ?? `Speaker ${utterance.speakerKey}`}`}
+                        autoFocus
+                        maxLength={80}
+                        placeholder={utterance.speakerLabel ?? `Speaker ${utterance.speakerKey}`}
+                        value={speakerDrafts[utterance.speakerKey] ?? ""}
+                        onChange={(event) => setSpeakerDrafts((current) => ({ ...current, [utterance.speakerKey as number]: event.target.value }))}
+                      />
+                      <button type="submit" disabled={savingSpeakerKey === utterance.speakerKey}>
+                        {savingSpeakerKey === utterance.speakerKey ? "Saving" : "Save"}
+                      </button>
+                      <button type="button" className="inline-speaker-cancel" onClick={() => cancelRenameSpeaker(utterance.speakerKey as number)}>
+                        Cancel
+                      </button>
+                    </form>
+                  ) : utterance.speakerKey && utterance.speakerRole !== "SELF" ? (
+                    <button type="button" className="bubble-speaker speaker-name-button" onClick={() => beginRenameSpeaker(utterance)} title="Rename speaker">
+                      {displaySpeaker(utterance, speakerAliases)}
+                      <span aria-hidden>Edit</span>
+                    </button>
+                  ) : (
+                    <span className="bubble-speaker">{displaySpeaker(utterance, speakerAliases)}</span>
+                  )}
                   {utterance.interim ? (
                     <span className="bubble-live">refining</span>
                   ) : (
@@ -463,7 +602,7 @@ export function LiveMeetingWorkspace({
               {latestNotes ? <span className="rail-count">synthesized</span> : null}
             </div>
             {hasNotes ? (
-              <>
+              <div className="notes-body">
                 <div className="notes-grid">
                   <div className="notes-block">
                     <p className="notes-label">Briefing</p>
@@ -495,9 +634,11 @@ export function LiveMeetingWorkspace({
                   </div>
                 </div>
                 {latestNotes.model ? <p className="notes-model">via {latestNotes.model}</p> : null}
-              </>
+              </div>
             ) : (
-              <p className="muted">Synthesized briefing, action items, and open questions appear once enough of the meeting has been heard.</p>
+              <div className="notes-body">
+                <p className="muted">Synthesized briefing, action items, and open questions appear once enough of the meeting has been heard.</p>
+              </div>
             )}
           </section>
       </section>
@@ -538,13 +679,33 @@ function speakerLabel(role: SpeakerRole): string {
   return "Unknown";
 }
 
-// Prefers the diarized "Speaker N" label when present; otherwise falls back to the
-// coarse role label ("Participant"). Your own mic is always "You".
-function displaySpeaker(utterance: Utterance): string {
+function buildSpeakerAliases(utterances: Utterance[]): Record<number, string> {
+  const aliases: Record<number, string> = {};
+  for (const utterance of utterances) {
+    const speakerKey = speakerIdentityKey(utterance);
+    if (speakerKey && utterance.speakerAlias) {
+      aliases[speakerKey] = utterance.speakerAlias;
+    }
+  }
+  return aliases;
+}
+
+function speakerIdentityKey(utterance: Utterance): number | undefined {
+  return utterance.speakerKey;
+}
+
+function displaySpeaker(utterance: Utterance, aliases: Record<number, string>): string {
   if (utterance.speakerRole === "SELF") {
     return "You";
   }
-  return utterance.speakerLabel ?? speakerLabel(utterance.speakerRole);
+  const speakerKey = speakerIdentityKey(utterance);
+  if (speakerKey && aliases[speakerKey]) {
+    return aliases[speakerKey];
+  }
+  if (speakerKey) {
+    return utterance.speakerAlias ?? utterance.speakerLabel ?? `Speaker ${speakerKey}`;
+  }
+  return speakerLabel(utterance.speakerRole);
 }
 
 function sourceLabel(source: CaptureSourceStatus): string {
