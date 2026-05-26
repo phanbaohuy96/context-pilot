@@ -1,5 +1,26 @@
 import { describe, expect, it } from "vitest";
-import { detectMeetingAssistInsights, isLikelyHallucinatedTranscription } from "./meetings";
+import { detectMeetingAssistInsights, isLikelyHallucinatedTranscription, meanTokenConfidence } from "./meetings";
+
+describe("transcription confidence", () => {
+  it("averages real token probabilities and ignores whisper special tokens", () => {
+    const segments = [
+      { tokens: [{ text: " Hi", p: 0.9 }, { text: "[_BEG_]", p: 0.1 }, { text: " there", p: 0.7 }] },
+    ];
+    // 0.1 from the "[...]" special token must not drag the mean down.
+    expect(meanTokenConfidence(segments)).toBeCloseTo(0.8);
+  });
+
+  it("returns undefined when there are no real tokens (fail-soft, not 0)", () => {
+    expect(meanTokenConfidence([])).toBeUndefined();
+    expect(meanTokenConfidence([{ tokens: [{ text: "[_TT_0]", p: 0.5 }] }])).toBeUndefined();
+    expect(meanTokenConfidence([{}])).toBeUndefined();
+  });
+
+  it("clamps out-of-range probabilities into [0,1]", () => {
+    expect(meanTokenConfidence([{ tokens: [{ text: "a", p: 1.5 }] }])).toBe(1);
+    expect(meanTokenConfidence([{ tokens: [{ text: "a", p: -0.2 }] }])).toBe(0);
+  });
+});
 
 describe("transcription noise filtering", () => {
   it("flags Whisper silence-hallucination phrases regardless of punctuation/case", () => {

@@ -84,6 +84,27 @@ export function isLikelyHallucinatedTranscription(text: string): boolean {
   return HALLUCINATED_TRANSCRIPTIONS.has(normalized);
 }
 
+export type TranscriptionToken = { text?: string; p?: number };
+export type TranscriptionSegment = { tokens?: TranscriptionToken[] };
+
+// Utterance confidence from whisper's token-level output (-ojf JSON): the mean
+// probability of the real tokens, ignoring whisper's special "[...]" markers (e.g.
+// "[_BEG_]") so they don't skew it. Returns undefined when there are no real tokens,
+// and clamps to [0,1] to satisfy the schema.
+export function meanTokenConfidence(segments: TranscriptionSegment[]): number | undefined {
+  let sum = 0;
+  let count = 0;
+  for (const segment of segments) {
+    for (const token of segment.tokens ?? []) {
+      if (typeof token.p === "number" && token.text && !token.text.trim().startsWith("[")) {
+        sum += token.p;
+        count += 1;
+      }
+    }
+  }
+  return count ? Math.min(1, Math.max(0, sum / count)) : undefined;
+}
+
 export type MeetingAssistDetectionInput = {
   utteranceId: string;
   text: string;

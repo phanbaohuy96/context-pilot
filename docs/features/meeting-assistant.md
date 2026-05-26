@@ -9,7 +9,7 @@ Because it captures **local audio** (microphone + system/loopback), it works wit
 | Concept | Meaning |
 |---|---|
 | **MeetingSession** | One sitting. `ACTIVE` while in progress, `ENDED` after. Has a provider label and optional context id. |
-| **TranscriptUtterance** | One transcribed unit. `speakerRole` = `SELF` (your mic) / `OTHER` (others) / `UNKNOWN`; `sourceChannel` = `MIC` / `LOOPBACK` / `MIXED` / `IMPORTED`. |
+| **TranscriptUtterance** | One transcribed unit. `speakerRole` = `SELF` (your mic) / `OTHER` (others) / `UNKNOWN`; `sourceChannel` = `MIC` / `LOOPBACK` / `MIXED` / `IMPORTED`. `startedAt`/`endedAt` are audio-relative (derived from frame indices as an offset from capture start, so `endedAt - startedAt` is the real spoken duration); `confidence` is the mean whisper token probability. |
 | **MeetingInsight** | A deterministic assist card: `QUESTION_FOR_YOU`, `ANSWER_SUGGESTION`, `ACTION_ITEM`, `NAME_MENTION`, `NOTE`. |
 | **MeetingSummary** | Reserved for end-of-meeting summaries (open questions / action items). |
 
