@@ -41,6 +41,7 @@ flowchart TB
   api -->|BullMQ enqueue| redis
   capmgr --> ffmpeg
   capmgr -->|Prisma| pg
+  capmgr -->|rolling notes / speaker embedding| ai
   redis --> gworker
   redis --> sworker
   gworker -->|Prisma| pg
@@ -58,20 +59,20 @@ flowchart TB
 - **`apps/web`** — Next.js App Router. Two responsibilities:
   - **Dashboard pages** under `src/app/(dashboard)/`: `/` (overview), `/sources`, `/chats/[sourceId]`, `/threads`, `/requirements`, `/agent`, `/export`, `/meetings`, `/meetings/[meetingId]`.
   - **API routes** under `src/app/api/`: Graph (`/graph/auth/*`, `/graph/chats`, `/graph/subscriptions`, `/graph/webhook`), `/sources`, `/requirements`, `/agent/ask`, `/export`, and the meeting endpoints (`/meetings`, `/meetings/[id]`, `/meetings/[id]/utterances`, `/meetings/[id]/capture`, `/meetings/devices`).
-  - Server-side helpers in `src/lib/`: `queues.ts` (BullMQ producers), `graph.ts` (Graph setup), `tenant.ts` (default tenant), `meeting-insights.ts` (deterministic assist detection), and `capture/` (server-managed audio capture).
+  - Server-side helpers in `src/lib/`: `queues.ts` (BullMQ producers), `graph.ts` (Graph setup), `tenant.ts` (default tenant), `meeting-insights.ts` (deterministic assist detection), `meeting-notes.ts` (opt-in rolling LLM notes), and `capture/` (server-managed audio capture — `manager.ts` plus `diarizer.ts` for opt-in speaker embeddings).
 - **`apps/worker`** — long-running Node process. Registers BullMQ workers (`graph-notifications`, `summarize-thread`) and runs a 5-minute subscription-renewal loop. Entry: `src/index.ts`.
 - **`apps/meeting-capture`** — standalone CLI capture companion (`tsx src/index.ts`). An alternative to the server-managed capture for headless/manual use.
 
 ### Packages
 
 - **`packages/core`** — framework-agnostic domain layer:
-  - `domain/` schemas & types: `sources`, `messages`, `requirements`, `agent`, `meetings` (+ `meetings.test.ts`).
+  - `domain/` schemas & types: `sources`, `messages`, `requirements`, `agent`, `meetings` (assist heuristics, transcription-noise filter, meeting-notes schema) and `diarization` (pure speaker clustering), each with tests.
   - `policies/monitoring.ts` — `assertSourceCanIngest` ingestion guard.
   - `queues.ts` — queue names + job payload types.
   - `sanitize.ts` — HTML sanitization for untrusted Teams content.
   - `security.ts` — security helpers (e.g. client-state hashing/compare).
 - **`packages/graph`** — Microsoft Graph integration: `client.ts`, `resources.ts`, `subscriptions.ts`, `normalize.ts` (Graph chat message → normalized `Message`).
-- **`packages/ai`** — `provider.ts` (the `AiProvider` contract), `factory.ts` (provider selection), `providers/local-openai.ts`, `providers/claude-code-cli.ts`, `prompts/` (summarize, requirements, answer, context), `json.ts` (robust JSON parsing of model output).
+- **`packages/ai`** — `provider.ts` (the `AiProvider` contract: `summarizeThread`, `extractRequirements`, `answerQuestion`, `summarizeMeeting`), `factory.ts` (provider selection), `providers/local-openai.ts`, `providers/claude-code-cli.ts`, `prompts/` (summarize, requirements, answer, context, meeting-notes), `json.ts` (robust JSON parsing of model output).
 - **`packages/db`** — Prisma client singleton (`prisma`) and re-exports.
 
 ## Data model
@@ -103,6 +104,8 @@ Two domains share the same database:
 
 `ThreadSummary`, `Requirement`, and `AgentSession` all retain `evidenceMessageIds` so AI outputs trace back to the Teams messages that justified them.
 
+In the meeting domain, `TranscriptUtterance` carries audio-relative `startedAt`/`endedAt` (derived from frame indices) and `confidence`, with the speaker label/key in `engineMetadata` when diarization is on; `MeetingSummary` is the meeting's rolling LLM notes (`summary` + `openQuestions` + `actionItems`), updated in place.
+
 ## Job queues
 
 Defined in `packages/core/src/queues.ts`, produced by `apps/web/src/lib/queues.ts`, consumed by `apps/worker`:
@@ -113,7 +116,7 @@ Defined in `packages/core/src/queues.ts`, produced by `apps/web/src/lib/queues.t
 | `summarize-thread` | `SummarizeThreadJobData` | after a message is upserted | `summarize-thread.ts` |
 | `renew-subscriptions` | (timer-driven) | worker interval | `renew-graph-subscriptions.ts` |
 
-> Note: meeting transcription does **not** use the queue. The capture manager writes `TranscriptUtterance` rows and deterministic `MeetingInsight` rows synchronously in `apps/web`. See [meeting-assistant.md](features/meeting-assistant.md).
+> Note: meeting transcription does **not** use the queue. In `apps/web`, the capture manager writes `TranscriptUtterance` rows and deterministic `MeetingInsight` rows synchronously; opt-in speaker diarization (local embedding model) and rolling notes (`MeetingSummary`, via the AI provider) run off the capture path, not the queue. See [meeting-assistant.md](features/meeting-assistant.md).
 
 ## Verification
 

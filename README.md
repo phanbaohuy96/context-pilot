@@ -3,7 +3,7 @@
 A local-first TypeScript monorepo with two cooperating pillars:
 
 1. **Teams discovery & quoting** — ingests *explicitly approved* Microsoft Teams channels/chats via Microsoft Graph, normalizes and stores messages as evidence, summarizes threads, extracts requirement cards, and lets you ask questions over the collected context.
-2. **Provider-agnostic live meeting assistant** — listens to local macOS audio (microphone + system/loopback), transcribes it locally with Whisper, shows a live transcript, and surfaces private "assist now" cards (likely questions for you, action items, suggested replies). Works with **any** meeting provider (Teams, Google Meet, Zoom, browser calls) because it captures audio off the machine, not provider APIs.
+2. **Provider-agnostic live meeting assistant** — listens to local macOS audio (microphone + system/loopback), transcribes it locally with Whisper, shows a live transcript, and surfaces private "assist now" cards (likely questions for you, action items, suggested replies). Two opt-in extras: per-speaker labels (local voice-embedding diarization) and rolling LLM meeting notes (summary + open questions + action items). Works with **any** meeting provider (Teams, Google Meet, Zoom, browser calls) because it captures audio off the machine, not provider APIs.
 
 Both pillars run locally by default. Reasoning uses a local OpenAI-compatible model or the Claude Code CLI; transcription uses a local Whisper build. Nothing leaves the machine unless you point a provider at a remote endpoint.
 
@@ -99,7 +99,7 @@ Full setup and the capture pipeline are documented in [docs/features/meeting-ass
 ## Documentation
 
 - [Architecture](docs/architecture.md) — modules, data model, runtime topology, system workflow.
-- [Meeting assistant](docs/features/meeting-assistant.md) — local capture, VAD chunking, interim transcripts, assist cards.
+- [Meeting assistant](docs/features/meeting-assistant.md) — local capture, VAD chunking, interim transcripts, assist cards, opt-in speaker diarization and rolling LLM notes.
 - [Teams ingestion & quoting](docs/features/teams-ingestion.md) — Graph subscriptions, webhook, summarization, requirements.
 - [AI & providers](docs/features/ai-and-providers.md) — provider contract, selection, ask-agent flow.
 - [CLAUDE.md](CLAUDE.md) — contributor/agent guidance and operating principles.
@@ -112,7 +112,9 @@ All runtime config comes from environment variables (see [.env.example](.env.exa
 - **Microsoft Graph (optional):** `AZURE_TENANT_ID`, `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET`, `GRAPH_CLIENT_STATE`, `GRAPH_WEBHOOK_URL`, `AZURE_REDIRECT_URI`, `GRAPH_DELEGATED_SCOPES`.
 - **Local AI:** `LOCAL_AI_BASE_URL`, `LOCAL_AI_MODEL`, `LOCAL_AI_API_KEY`.
 - **Claude Code CLI:** `CLAUDE_CODE_COMMAND`, `CLAUDE_CODE_WORKDIR`, `CLAUDE_CODE_TIMEOUT_MS`.
-- **Meeting capture (CLI):** `MEETING_CAPTURE_FFMPEG_FORMAT`, `MEETING_CAPTURE_MIC_INPUT`, `MEETING_CAPTURE_MEETING_INPUT`, `MEETING_CAPTURE_TRANSCRIBE_COMMAND`, `MEETING_CAPTURE_WHISPER_MODEL`, `MEETING_CAPTURE_SILENCE_MAX_DB`.
+- **Meeting capture:** `MEETING_CAPTURE_FFMPEG_FORMAT`, `MEETING_CAPTURE_MIC_INPUT`, `MEETING_CAPTURE_MEETING_INPUT`, `MEETING_CAPTURE_TRANSCRIBE_COMMAND`, `MEETING_CAPTURE_WHISPER_MODEL`, `MEETING_CAPTURE_SILENCE_MAX_DB`.
+- **Speaker diarization (opt-in):** `MEETING_CAPTURE_DIARIZATION` (`true` to enable), `MEETING_DIARIZATION_MODEL`, `MEETING_DIARIZATION_SIMILARITY_THRESHOLD`, `MEETING_DIARIZATION_MODEL_CACHE`.
+- **Rolling meeting notes (opt-in):** `MEETING_NOTES` (`true` to enable), `MEETING_NOTES_PROVIDER`, `MEETING_NOTES_MIN_NEW_UTTERANCES`.
 
 ## Privacy & policy boundaries
 

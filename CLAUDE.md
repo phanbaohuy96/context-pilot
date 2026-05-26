@@ -80,7 +80,7 @@ The policy boundary is explicit source approval: ingestion must go through `asse
 
 ### AI flow
 
-`packages/ai/src/provider.ts` defines the provider contract: `summarizeThread`, `extractRequirements`, and `answerQuestion`. `createAiProvider` in `packages/ai/src/factory.ts` selects either:
+`packages/ai/src/provider.ts` defines the provider contract: `summarizeThread`, `extractRequirements`, `answerQuestion`, and `summarizeMeeting` (rolling meeting notes). `createAiProvider` in `packages/ai/src/factory.ts` selects either:
 
 - `LOCAL_OPENAI` — calls a local OpenAI-compatible `/chat/completions` endpoint such as Ollama or LM Studio.
 - `CLAUDE_CODE_CLI` — spawns the local Claude Code CLI with `claude -p` and a bounded prompt.
@@ -115,7 +115,7 @@ Server APIs live under `apps/web/src/app/api/`. Queue producers use `apps/web/sr
 
 `MonitoredSource` represents an explicitly approved Teams channel/chat. `GraphSubscription` links Graph subscription IDs back to sources. `Message` stores both sanitized text/html and raw Graph JSON. `ThreadSummary`, `Requirement`, and `AgentSession` all retain evidence message IDs so outputs can be traced back to Teams messages.
 
-Meeting models are provider-agnostic: `MeetingSession` (status, platform label, optional source link) owns `TranscriptUtterance` (speakerRole `SELF`/`OTHER`/`UNKNOWN`, sourceChannel `MIC`/`LOOPBACK`/`MIXED`/`IMPORTED`, `engineMetadata` carrying the interim flag), `MeetingInsight` (assist-card kinds), and `MeetingSummary` (reserved for end-of-meeting summaries).
+Meeting models are provider-agnostic: `MeetingSession` (status, platform label, optional source link) owns `TranscriptUtterance` (speakerRole `SELF`/`OTHER`/`UNKNOWN`, sourceChannel `MIC`/`LOOPBACK`/`MIXED`/`IMPORTED`, audio-relative `startedAt`/`endedAt` + `confidence`, `engineMetadata` carrying the interim flag and — when diarization is on — `speakerLabel`/`speakerKey`), `MeetingInsight` (assist-card kinds), and `MeetingSummary` (the rolling LLM notes: `summary`/`openQuestions`/`actionItems`, updated in place).
 
 ## Agent skills
 
