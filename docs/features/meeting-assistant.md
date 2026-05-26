@@ -105,7 +105,7 @@ Key parameters (in `apps/web/src/lib/capture/manager.ts`):
 
 `detectMeetingAssistInsights` in `packages/core/src/domain/meetings.ts` runs pattern checks on each finalized non-`SELF` utterance and emits cards via `apps/web/src/lib/meeting-insights.ts`:
 
-- **QUESTION_FOR_YOU** + **ANSWER_SUGGESTION** — question patterns / `?`.
+- **QUESTION_FOR_YOU** + **ANSWER_SUGGESTION** — question patterns / `?`. These two are emitted from the same utterance (shared `relatedUtteranceIds`); the UI pairs them into one card (question + suggested reply).
 - **ACTION_ITEM** — phrases like "can you", "could you", "please", "you need to".
 - **NAME_MENTION** — when your configured name appears.
 
@@ -118,7 +118,7 @@ These are code-driven (no model call) so they're fast and private.
 - After a finalized utterance, the capture path calls `maybeGenerateMeetingNotes` (`apps/web/src/lib/meeting-notes.ts`), fire-and-forget. It is throttled per meeting (regenerates every `MEETING_NOTES_MIN_NEW_UTTERANCES` new finalized utterances, default 6) and serialized so the two capture channels can't run it concurrently.
 - It builds a transcript from the recent finalized utterances (with speaker labels) and calls `provider.summarizeMeeting` (`packages/ai`) to get `{ summary, openQuestions, actionItems }`, parsed by `parseMeetingNotes` (tolerant of code fences / surrounding prose). The result upserts the meeting's single rolling `MeetingSummary`.
 - Enable with `MEETING_NOTES="true"` (off by default). Provider is the configured local LLM: `MEETING_NOTES_PROVIDER` = `LOCAL_OPENAI` (default; uses `LOCAL_AI_*`) or `CLAUDE_CODE_CLI` (uses `CLAUDE_CODE_*`). Failures are logged and swallowed — they never disrupt capture or the transcript.
-- The UI shows action items + open questions in the **Meeting notes** panel and the prose `summary` in the **Summaries** panel.
+- The UI shows the prose `summary` (as **Briefing**), action items, and open questions together in the **Meeting notes** panel of the intelligence rail.
 
 ## API surface
 
@@ -134,16 +134,19 @@ These are code-driven (no model call) so they're fast and private.
 
 ## UI (`LiveMeetingWorkspace`)
 
-Polls `/api/meetings/[id]` and `/api/meetings/[id]/capture` every **1.5s**. Layout, top to bottom:
+Polls `/api/meetings/[id]` and `/api/meetings/[id]/capture` every **1.5s**. The three focus panels (Transcript, Assist now, Meeting notes) lead; the controls sit in a slim bar above them. Layout, top to bottom:
 
-1. **Assist now** (wider) + **Meeting notes** — a 60/40 row; the actionable focus.
-2. **Transcript stream** + **Summaries** — transcript is chronological (oldest top), auto-scrolls to the newest line, and shows the **refining** indicator on in-progress lines.
-3. **Live caption** + **Listening controls** — device pickers (mic + system/loopback), Start/Stop, live status.
+1. **Console bar** — one slim row carrying everything that used to take two: the on-air/idle status pill (the live state shows an animated equalizer), the session metadata (provider, started, audio source, linked source), a single-line ticker of the current caption, the compact device pickers (mic + system/loopback), and Start/Stop. Tinted red while on air; warnings/capture status sit in a thin strip just below. Metadata is dropped first on narrow widths so the ticker and controls keep priority.
+2. **Workspace split** — the **Transcript** leads (the centerpiece, wider column): chronological (oldest top), auto-scrolls to the newest line, and shows the **refining** indicator on in-progress lines. Beside it:
+   - **Assist now** — cards, newest first. Each `QUESTION_FOR_YOU` is paired with its `ANSWER_SUGGESTION` into one card (question + **Suggested reply**); action items and name mentions are their own cards. An action that exactly duplicates a question from the same utterance is dropped. Cards carry a relative time and a **new** pulse for items that arrived since you last looked (tracked client-side via seen insight ids, so nothing flashes on first open).
+   - **Meeting notes** — Briefing + action items + open questions. The panel sits full-width below the transcript/assist row with the three sections as columns, and promotes to a stacked right-hand column on very wide (≥1560px) screens.
+
+The page renders full-width, and the dashboard sidebar is collapsible (icon-rail by default; the choice is remembered in `localStorage`).
 
 Behavioral notes:
 
 - **No auto-start** — capture begins only when you click **Start listening**.
-- **Device defaults** — the mic defaults to the built-in mic; the "Capture meeting audio from (others)" field auto-selects a detected loopback device (BlackHole/Aggregate/Multi-Output).
+- **Device defaults** — the mic defaults to the built-in mic; the "Meeting audio — others (loopback)" field auto-selects a detected loopback device (BlackHole/Aggregate/Multi-Output).
 - **Inputs vs outputs** — the dropdowns list *capture inputs*. Your headphones/speakers are an *output*, set in macOS Sound, not here.
 - **Auto-stop on close** — a `pagehide` handler stops this page's capture (via a `keepalive` DELETE) so a closed/reloaded tab doesn't keep capturing.
 
@@ -164,7 +167,7 @@ flowchart LR
 1. `brew install ffmpeg whisper-cpp` and `brew install --cask blackhole-2ch`.
 2. Provide a Whisper model at `~/.cache/teams-discovery-observer/models/ggml-tiny.en.bin` (or set `MEETING_CAPTURE_WHISPER_MODEL`).
 3. In **Audio MIDI Setup**, create a **Multi-Output Device** containing your headphones **and** BlackHole 2ch; set your headphones as Primary and enable Drift Correction on BlackHole. Right-click it → **Use This Device For Sound Output**.
-4. In the meeting screen, pick **BlackHole 2ch** as "Capture meeting audio from (others)" (auto-selected) and your mic, then **Start listening**.
+4. In the meeting screen, pick **BlackHole 2ch** as "Meeting audio — others (loopback)" (auto-selected) and your mic, then **Start listening**.
 
 ## Privacy
 

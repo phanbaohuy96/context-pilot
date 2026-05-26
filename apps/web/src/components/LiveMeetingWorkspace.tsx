@@ -25,7 +25,21 @@ type Insight = {
   kind: string;
   text: string;
   keywords: string[];
+  relatedUtteranceIds: string[];
   createdAt: string;
+};
+
+// A question and its suggested answer are two insights emitted from the same
+// utterance; the rail pairs them into one card so they read as one thought.
+type AssistItem = {
+  key: string;
+  ids: string[];
+  kind: "QUESTION" | "ACTION" | "MENTION" | "NOTE";
+  createdAt: string;
+  question?: string;
+  reply?: string;
+  body?: string;
+  keywords: string[];
 };
 
 type Summary = {
@@ -79,6 +93,10 @@ type CaptureStatus = {
 type LiveMeetingWorkspaceProps = {
   meetingId: string;
   status: MeetingStatus;
+  platform: string;
+  startedLabel: string;
+  audioSource: string;
+  linkedSource: string | null;
   initialUtterances: Utterance[];
   initialInsights: Insight[];
   initialSummaries: Summary[];
@@ -87,6 +105,10 @@ type LiveMeetingWorkspaceProps = {
 export function LiveMeetingWorkspace({
   meetingId,
   status,
+  platform,
+  startedLabel,
+  audioSource,
+  linkedSource,
   initialUtterances,
   initialInsights,
   initialSummaries,
@@ -238,8 +260,33 @@ export function LiveMeetingWorkspace({
   const latestCaption = useMemo(() => utterances[utterances.length - 1], [utterances]);
   // Synthesized rolling notes come from the latest MeetingSummary (newest first).
   const latestNotes = summaries[0];
-  const hasNotes = Boolean(latestNotes && (latestNotes.actionItems.length || latestNotes.openQuestions.length));
-  const latestInsights = insights.slice(0, 6);
+  const hasNotes = Boolean(
+    latestNotes && (latestNotes.summary || latestNotes.actionItems.length || latestNotes.openQuestions.length),
+  );
+
+  // Pair each question with its suggested answer (both emitted from one utterance)
+  // into a single card, newest first, with the engine's verbose prefixes stripped.
+  const assistItems = useMemo(() => buildAssistItems(insights), [insights]);
+
+  // "New since you last looked": ids present on first render are treated as seen, so
+  // nothing flashes on open; cards arriving on later polls pulse briefly. The 1.5s
+  // poll re-renders age the flag out on their own (no extra timer needed).
+  const seenInsightIds = useRef<Set<string>>(new Set(initialInsights.map((insight) => insight.id)));
+  const newInsightAt = useRef<Map<string, number>>(new Map());
+  useEffect(() => {
+    for (const insight of insights) {
+      if (!seenInsightIds.current.has(insight.id)) {
+        seenInsightIds.current.add(insight.id);
+        newInsightAt.current.set(insight.id, Date.now());
+      }
+    }
+  }, [insights]);
+  const isNewItem = (item: AssistItem): boolean =>
+    item.ids.some((id) => {
+      const at = newInsightAt.current.get(id);
+      return at != null && Date.now() - at < NEW_INSIGHT_MS;
+    });
+
   const transcriptFeedRef = useRef<HTMLDivElement>(null);
 
   // Keep the chronological transcript pinned to the newest line at the bottom.
@@ -252,52 +299,94 @@ export function LiveMeetingWorkspace({
 
   return (
     <section className="live-workspace">
-      <section className="grid grid-60-40">
-        <section className="card stack">
-          <h3>Assist now</h3>
-          {latestInsights.length ? latestInsights.map((insight) => (
-            <article key={insight.id} className="assist-card">
-              <span className="badge">{formatInsightKind(insight.kind)}</span>
-              <p className="message">{insight.text}</p>
-              <p className="muted">Keywords: {insight.keywords.join(", ") || "None"}</p>
-            </article>
-          )) : (
-            <p className="muted">Questions and action requests will appear here while the meeting audio is transcribed.</p>
-          )}
-        </section>
+      {/* Slim console bar — status + listening controls, kept out of the way so the
+          three focus panels (transcript, assist, notes) lead. */}
+      <section className={`console-bar${capturing ? " is-live" : ""}`}>
+        <div className="console-status">
+          <span className={`live-pill ${capturing ? "is-live" : active ? "is-idle" : ""}`}>
+            {capturing ? (
+              <span className="eq" aria-hidden>
+                <span /><span /><span /><span /><span />
+              </span>
+            ) : (
+              <span className="rec-dot" aria-hidden />
+            )}
+            {capturing ? "On air" : active ? "Idle" : meetingStatus}
+          </span>
+          <span className="session-meta">
+            <span className="badge">{platform}</span>
+            <span className="meta-item">{startedLabel}</span>
+            <span className="meta-item">{audioSource}</span>
+            {linkedSource ? <span className="meta-item">{linkedSource}</span> : null}
+          </span>
+          <span className="console-ticker" title={latestCaption?.text}>
+            {latestCaption ? (
+              <><span className="console-ticker-who">{displaySpeaker(latestCaption)}:</span> {latestCaption.text}</>
+            ) : (
+              <span className="muted">Start listening to caption the meeting audio or your microphone.</span>
+            )}
+          </span>
+        </div>
 
-        <section className="card stack">
-          <h3>Meeting notes</h3>
-          {hasNotes ? (
-            <>
-              {latestNotes.actionItems.length ? (
-                <div>
-                  <p className="muted">Action items</p>
-                  <ul>
-                    {latestNotes.actionItems.map((item) => <li key={item}>{item}</li>)}
-                  </ul>
-                </div>
-              ) : null}
-              {latestNotes.openQuestions.length ? (
-                <div>
-                  <p className="muted">Open questions</p>
-                  <ul>
-                    {latestNotes.openQuestions.map((question) => <li key={question}>{question}</li>)}
-                  </ul>
-                </div>
-              ) : null}
-            </>
+        <div className="console-controls">
+          <label className="inline-select" title="Your microphone (your voice)">
+            <span aria-hidden>🎙</span>
+            <select value={micInput} onChange={(event) => setMicInput(event.target.value)} disabled={!active}>
+              <option value="">Mic: off</option>
+              {devices.map((device) => (
+                <option key={`mic-${device.index}`} value={device.index}>{device.name}</option>
+              ))}
+            </select>
+          </label>
+          <label className="inline-select" title="Meeting audio — others (system/loopback)">
+            <span aria-hidden>🔊</span>
+            <select value={meetingInput} onChange={(event) => setMeetingInput(event.target.value)} disabled={!active}>
+              <option value="">Others: off</option>
+              {devices.map((device) => (
+                <option key={`meeting-${device.index}`} value={device.index}>
+                  {device.name}{isLoopbackDevice(device) ? " (loopback)" : ""}
+                </option>
+              ))}
+            </select>
+          </label>
+          {capturing ? (
+            <button type="button" className="danger" onClick={() => void stopCapture()} disabled={capturePending}>
+              ■ Stop
+            </button>
           ) : (
-            <p className="muted">Synthesized action items and open questions will appear here once enough of the meeting has been transcribed.</p>
+            <button type="button" onClick={() => void startCapture()} disabled={!active || capturePending}>
+              ● Start listening
+            </button>
           )}
-        </section>
+        </div>
       </section>
 
-      <section className="grid grid-2">
-        <section className="card stack transcript-card">
+      {(captureError || micOnlyWarning || (!hasLoopbackDevice && active) || capture?.sources.length) ? (
+        <div className="console-strip">
+          {captureError ? <span className="badge danger">{captureError}</span> : null}
+          {capture?.sources.map((source) => (
+            <span key={source.label} className={source.running ? "badge success" : "badge"}>
+              {sourceLabel(source)} · {source.utterances}
+            </span>
+          ))}
+          {micOnlyWarning ? (
+            <span className="capture-warning">Mic only — it can’t hear app/browser audio. Pick a system-audio (loopback) device to caption a meeting.</span>
+          ) : !hasLoopbackDevice && active ? (
+            <span className="hint">No loopback device. Install <strong>BlackHole</strong> + a Multi-Output Device to caption meeting audio.</span>
+          ) : null}
+        </div>
+      ) : null}
+
+      {/* The transcript leads, Assist beside it, and Meeting notes reflows below
+          (or into a right column on wide screens). */}
+      <section className="workspace-split">
+        <section className="card transcript-card panel-transcript">
           <div className="transcript-head">
-            <h3>Transcript stream</h3>
-            <span className="muted">{utterances.length} lines</span>
+            <h3>
+              Transcript
+              {capturing ? <span className="bubble-live">live</span> : null}
+            </h3>
+            <span className="rail-count">{utterances.length} lines</span>
           </div>
           <div className="transcript-feed" ref={transcriptFeedRef}>
             {utterances.length ? utterances.map((utterance) => (
@@ -316,98 +405,101 @@ export function LiveMeetingWorkspace({
                 <p className="bubble-text">{utterance.text}</p>
               </article>
             )) : (
-              <p className="muted">No transcript yet.</p>
+              <div className="empty-state">
+                <span className="eq" aria-hidden>
+                  <span /><span /><span /><span /><span />
+                </span>
+                <p>No transcript yet. Captions stream in here as the meeting is heard.</p>
+              </div>
             )}
           </div>
         </section>
 
-        <section className="card stack">
-          <h3>Summaries</h3>
-          {summaries.length ? summaries.map((summary) => (
-            <article key={summary.id} className="card">
-              <p className="message">{summary.summary}</p>
-              <p className="muted">Model: {summary.model}</p>
-            </article>
-          )) : (
-            <p className="muted">Summary generation is next. For now, this page focuses on live captions and assist cards.</p>
-          )}
-        </section>
-      </section>
-
-      <section className="card hero-card stack">
-        <div className="grid grid-2">
-          <div>
-            <span className={capturing ? "badge success" : active ? "badge" : "badge danger"}>
-              {capturing ? "Listening live" : active ? "Idle — not listening" : meetingStatus}
-            </span>
-            <h3>Live caption</h3>
-            <p className="live-caption">
-              {latestCaption ? latestCaption.text : "Start listening, then play any meeting audio or speak into the microphone."}
-            </p>
-            {latestCaption ? (
-              <p className="muted">{displaySpeaker(latestCaption)} · {latestCaption.sourceChannel} · {new Date(latestCaption.startedAt).toLocaleTimeString()}</p>
-            ) : null}
-          </div>
-
-          <div className="capture-panel stack">
-            <div className="capture-head">
-              <h3>Listening controls</h3>
-              <span className={capturing ? "dot dot-live" : "dot"} aria-hidden />
+          <section className="card panel-assist">
+            <div className="rail-eyebrow">
+              <h3>Assist now</h3>
+              <span className="rail-count">{assistItems.length || ""}</span>
             </div>
-            <p className="muted">Your microphone captures <strong>your</strong> voice. To caption the meeting/video audio playing on this Mac, pick a system-audio (loopback) device — a plain microphone cannot hear app or browser audio.</p>
-            <label>
-              Your microphone (your voice)
-              <select value={micInput} onChange={(event) => setMicInput(event.target.value)} disabled={!active}>
-                <option value="">Off</option>
-                {devices.map((device) => (
-                  <option key={`mic-${device.index}`} value={device.index}>{device.index} {device.name}</option>
-                ))}
-              </select>
-            </label>
-            <label>
-              Capture meeting audio from (others)
-              <select value={meetingInput} onChange={(event) => setMeetingInput(event.target.value)} disabled={!active}>
-                <option value="">Off</option>
-                {devices.map((device) => (
-                  <option key={`meeting-${device.index}`} value={device.index}>
-                    {device.index} {device.name}{isLoopbackDevice(device) ? " (loopback)" : ""}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <p className="muted">These are capture inputs, not outputs — your headphones/speakers are set in macOS Sound, not here.</p>
-            {!hasLoopbackDevice ? (
-              <p className="muted">No loopback device detected. Install <strong>BlackHole</strong> and route output through a Multi-Output Device to caption live meeting audio.</p>
-            ) : null}
-            <div className="capture-actions">
-              {capturing ? (
-                <button type="button" className="danger" onClick={() => void stopCapture()} disabled={capturePending}>
-                  Stop listening
-                </button>
-              ) : (
-                <button type="button" onClick={() => void startCapture()} disabled={!active || capturePending}>
-                  Start listening
-                </button>
-              )}
-            </div>
-            {captureError ? <span className="badge danger">{captureError}</span> : null}
-            {micOnlyWarning ? (
-              <p className="capture-warning">Listening on the microphone only — it can’t hear audio playing from apps or the browser. Select a system-audio (loopback) device above to caption a meeting or video.</p>
-            ) : null}
-            {capture?.sources.length ? (
-              <ul className="capture-status">
-                {capture.sources.map((source) => (
-                  <li key={source.label}>
-                    <span className={source.running ? "badge success" : "badge"}>{sourceLabel(source)}</span>
-                    <span className="muted"> {source.utterances} lines{source.lastError ? ` · ${source.lastError}` : ""}</span>
-                  </li>
-                ))}
-              </ul>
+            {assistItems.length ? (
+              <div className="assist-feed">
+                {assistItems.map((item) => {
+                  const meta = ASSIST_KINDS[item.kind];
+                  return (
+                    <article key={item.key} className={`assist-item assist-${item.kind.toLowerCase()}${isNewItem(item) ? " is-new" : ""}`}>
+                      <header className="assist-item-head">
+                        <span className="assist-kind"><span className="assist-icon" aria-hidden>{meta.icon}</span>{meta.label}</span>
+                        <span className="assist-time">{isNewItem(item) ? <span className="assist-new">new</span> : null}{relativeTime(item.createdAt)}</span>
+                      </header>
+                      {item.kind === "QUESTION" ? (
+                        <>
+                          <p className="assist-question">{item.question}</p>
+                          {item.reply ? (
+                            <div className="assist-reply">
+                              <span className="assist-reply-label">Suggested reply</span>
+                              <p>{item.reply}</p>
+                            </div>
+                          ) : null}
+                        </>
+                      ) : (
+                        <p className="assist-body">{item.body}</p>
+                      )}
+                      {item.keywords.length ? (
+                        <div className="kw-row">
+                          {item.keywords.slice(0, 5).map((kw) => <span key={kw} className="kw">{kw}</span>)}
+                        </div>
+                      ) : null}
+                    </article>
+                  );
+                })}
+              </div>
             ) : (
-              <p className="muted">Choose your microphone and system-audio device, then click Start listening. Audio is transcribed locally and chunks are deleted right after.</p>
+              <p className="muted">Questions, answer ideas, and action requests surface here the moment they’re heard.</p>
             )}
-          </div>
-        </div>
+          </section>
+
+          <section className="card panel-notes">
+            <div className="rail-eyebrow">
+              <h3>Meeting notes</h3>
+              {latestNotes ? <span className="rail-count">synthesized</span> : null}
+            </div>
+            {hasNotes ? (
+              <>
+                <div className="notes-grid">
+                  <div className="notes-block">
+                    <p className="notes-label">Briefing</p>
+                    {latestNotes.summary ? (
+                      <p className="message">{latestNotes.summary}</p>
+                    ) : (
+                      <p className="muted">—</p>
+                    )}
+                  </div>
+                  <div className="notes-block">
+                    <p className="notes-label">Action items</p>
+                    {latestNotes.actionItems.length ? (
+                      <ul className="notes-list">
+                        {latestNotes.actionItems.map((item) => <li key={item}>{item}</li>)}
+                      </ul>
+                    ) : (
+                      <p className="muted">—</p>
+                    )}
+                  </div>
+                  <div className="notes-block">
+                    <p className="notes-label">Open questions</p>
+                    {latestNotes.openQuestions.length ? (
+                      <ul className="notes-list questions">
+                        {latestNotes.openQuestions.map((question) => <li key={question}>{question}</li>)}
+                      </ul>
+                    ) : (
+                      <p className="muted">—</p>
+                    )}
+                  </div>
+                </div>
+                {latestNotes.model ? <p className="notes-model">via {latestNotes.model}</p> : null}
+              </>
+            ) : (
+              <p className="muted">Synthesized briefing, action items, and open questions appear once enough of the meeting has been heard.</p>
+            )}
+          </section>
       </section>
     </section>
   );
@@ -459,6 +551,105 @@ function sourceLabel(source: CaptureSourceStatus): string {
   return source.source === "MIC" ? "Microphone" : "Meeting audio";
 }
 
-function formatInsightKind(kind: string): string {
-  return kind.toLowerCase().replaceAll("_", " ");
+// How long a freshly-arrived assist card keeps its "new" pulse.
+const NEW_INSIGHT_MS = 12000;
+
+const ASSIST_KINDS: Record<AssistItem["kind"], { icon: string; label: string }> = {
+  QUESTION: { icon: "?", label: "Question for you" },
+  ACTION: { icon: "✓", label: "Action item" },
+  MENTION: { icon: "@", label: "Name mention" },
+  NOTE: { icon: "•", label: "Note" },
+};
+
+function stripPrefix(text: string, prefix: RegExp): string {
+  return text.replace(prefix, "").trim();
+}
+
+// Collapses the engine's raw insights (newest first) into display cards. A question
+// and the answer suggestion emitted from the same utterance are merged so they read
+// as one item; everything else stays a standalone card. Order is preserved, so the
+// newest assist item is first.
+function buildAssistItems(insights: Insight[]): AssistItem[] {
+  const answerByUtterance = new Map<string, Insight>();
+  const questionTextByUtterance = new Map<string, string>();
+  for (const insight of insights) {
+    const key = insight.relatedUtteranceIds[0] ?? insight.id;
+    if (insight.kind === "ANSWER_SUGGESTION" && !answerByUtterance.has(key)) {
+      answerByUtterance.set(key, insight);
+    }
+    if (insight.kind === "QUESTION_FOR_YOU" && !questionTextByUtterance.has(key)) {
+      questionTextByUtterance.set(key, stripPrefix(insight.text, /^Possible question for you:\s*/i));
+    }
+  }
+
+  const items: AssistItem[] = [];
+  for (const insight of insights) {
+    const utteranceKey = insight.relatedUtteranceIds[0] ?? insight.id;
+    if (insight.kind === "ANSWER_SUGGESTION") {
+      continue; // rendered with its question
+    }
+    if (insight.kind === "QUESTION_FOR_YOU") {
+      const answer = answerByUtterance.get(utteranceKey);
+      items.push({
+        key: insight.id,
+        ids: answer ? [insight.id, answer.id] : [insight.id],
+        kind: "QUESTION",
+        createdAt: insight.createdAt,
+        question: stripPrefix(insight.text, /^Possible question for you:\s*/i),
+        reply: answer ? stripPrefix(answer.text, /^Reply idea:\s*/i) : undefined,
+        keywords: insight.keywords,
+      });
+    } else if (insight.kind === "ACTION_ITEM") {
+      const body = stripPrefix(insight.text, /^Likely action item:\s*/i);
+      // Skip an action that is just the same sentence already shown as a question
+      // (e.g. "can you confirm?" matches both patterns) so the feed isn't doubled.
+      if (questionTextByUtterance.get(utteranceKey) === body) {
+        continue;
+      }
+      items.push({
+        key: insight.id,
+        ids: [insight.id],
+        kind: "ACTION",
+        createdAt: insight.createdAt,
+        body,
+        keywords: insight.keywords,
+      });
+    } else if (insight.kind === "NAME_MENTION") {
+      items.push({
+        key: insight.id,
+        ids: [insight.id],
+        kind: "MENTION",
+        createdAt: insight.createdAt,
+        body: stripPrefix(insight.text, /^Your name was mentioned:\s*/i),
+        keywords: insight.keywords,
+      });
+    } else {
+      items.push({
+        key: insight.id,
+        ids: [insight.id],
+        kind: "NOTE",
+        createdAt: insight.createdAt,
+        body: insight.text,
+        keywords: insight.keywords,
+      });
+    }
+  }
+  return items;
+}
+
+// Compact relative time for an assist card ("just now", "3m", "12:04").
+function relativeTime(iso: string): string {
+  const diffMs = Date.now() - new Date(iso).getTime();
+  const seconds = Math.round(diffMs / 1000);
+  if (seconds < 10) {
+    return "just now";
+  }
+  if (seconds < 60) {
+    return `${seconds}s ago`;
+  }
+  const minutes = Math.round(seconds / 60);
+  if (minutes < 60) {
+    return `${minutes}m ago`;
+  }
+  return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }

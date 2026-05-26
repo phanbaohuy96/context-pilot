@@ -74,17 +74,13 @@ export default async function MeetingWorkspacePage({ params }: MeetingWorkspaceP
         </form>
       </header>
 
-      <section className="card session-strip">
-        <p><strong>Status</strong><br /><span className={meeting.status === "ACTIVE" ? "badge success" : "badge"}>{meeting.status}</span></p>
-        <p><strong>Provider</strong><br /><span className="badge">{meeting.platform}</span></p>
-        <p><strong>Started</strong><br />{meeting.startedAt.toISOString()}</p>
-        <p><strong>Audio source</strong><br />{meeting.externalContextId ?? "macOS mic + meeting audio"}</p>
-        <p><strong>Linked source</strong><br />{meeting.source?.displayName ?? "None"}</p>
-      </section>
-
       <LiveMeetingWorkspace
         meetingId={meeting.id}
         status={meeting.status}
+        platform={meeting.platform}
+        startedLabel={meeting.startedAt.toISOString().slice(0, 16).replace("T", " ")}
+        audioSource={meeting.externalContextId ?? "mic + meeting audio"}
+        linkedSource={meeting.source?.displayName ?? null}
         initialUtterances={meeting.utterances.map((utterance) => ({
           id: utterance.id,
           speakerRole: utterance.speakerRole,
@@ -99,6 +95,7 @@ export default async function MeetingWorkspacePage({ params }: MeetingWorkspaceP
           kind: insight.kind,
           text: insight.text,
           keywords: insight.keywords,
+          relatedUtteranceIds: insight.relatedUtteranceIds,
           createdAt: insight.createdAt.toISOString(),
         }))}
         initialSummaries={meeting.summaries.map((summary) => ({
