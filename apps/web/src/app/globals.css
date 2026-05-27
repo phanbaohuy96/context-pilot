@@ -543,10 +543,36 @@ pre {
 /* ====================================================== MEETING WORKSPACE == */
 
 .meeting-header {
-  align-items: flex-start;
-  display: flex;
-  gap: 16px;
-  justify-content: space-between;
+  align-items: center;
+  display: grid;
+  gap: 14px;
+  grid-template-columns: minmax(220px, 1fr) auto auto;
+  margin-bottom: 18px;
+}
+
+.meeting-title {
+  min-width: 0;
+}
+
+.meeting-title h2 {
+  margin-bottom: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.meeting-header-actions {
+  justify-self: end;
+}
+
+.meeting-header-actions form {
+  margin: 0;
+}
+
+.meeting-header-actions button {
+  min-height: 42px;
+  padding: 9px 16px;
+  white-space: nowrap;
 }
 
 .live-workspace {
@@ -573,6 +599,17 @@ pre {
   background:
     radial-gradient(460px 120px at 0% 0%, var(--live-soft), transparent 72%),
     linear-gradient(180deg, var(--surface), var(--bg-elev));
+}
+
+.meeting-toolbar,
+.meeting-toolbar.is-live {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  flex-wrap: nowrap;
+  justify-content: flex-end;
+  min-width: 0;
+  padding: 0;
 }
 
 .console-status {
@@ -604,31 +641,44 @@ pre {
   text-overflow: ellipsis;
 }
 
-.console-ticker {
-  flex: 1 1 200px;
-  font-size: 13.5px;
-  color: var(--fg-soft);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  min-width: 0;
-}
-
-/* On tighter widths, drop the static metadata first so the live ticker + controls
-   keep priority. */
 @media (max-width: 1180px) {
   .session-meta {
     display: none;
   }
 }
 
-.console-ticker-who {
-  font-family: var(--font-mono);
+.meeting-toolbar .console-status {
+  flex: 0 1 auto;
+  flex-wrap: nowrap;
+}
+
+.meeting-toolbar .session-meta,
+.meeting-toolbar .console-controls {
+  flex-wrap: nowrap;
+}
+
+.meeting-toolbar .console-controls {
+  justify-content: flex-end;
+}
+
+.meeting-toolbar .live-pill {
   font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--accent-2);
-  margin-right: 5px;
+  padding: 5px 11px;
+}
+
+.meeting-toolbar .inline-select {
+  min-height: 40px;
+}
+
+.meeting-toolbar .inline-select select {
+  max-width: 160px;
+  padding-block: 7px;
+}
+
+.meeting-toolbar .console-controls button {
+  min-height: 40px;
+  padding: 8px 14px;
+  white-space: nowrap;
 }
 
 .console-controls {
@@ -757,26 +807,86 @@ pre {
 
 /* ------------------------------------------------------- Workspace split -- */
 
-/* Transcript + Assist lead; Meeting notes sits full-width beneath them and only
-   promotes to its own right-hand column once there's room. */
 .workspace-split {
+  --workspace-top-transcript-column: 1.6fr;
+  --workspace-top-assist-column: 1fr;
+  --workspace-transcript-column: 1.6fr;
+  --workspace-assist-column: 1fr;
+  --workspace-notes-column: 1.15fr;
+  align-items: stretch;
+  column-gap: 6px;
   display: grid;
-  gap: 18px;
-  grid-template-columns: 1.6fr 1fr;
   grid-template-areas:
-    "transcript assist"
-    "notes notes";
-  align-items: start;
+    "transcript resize-main assist"
+    "notes notes notes";
+  grid-template-columns:
+    minmax(360px, var(--workspace-top-transcript-column))
+    6px
+    minmax(280px, var(--workspace-top-assist-column));
+  row-gap: 18px;
 }
 
 .panel-transcript { grid-area: transcript; }
 .panel-assist { grid-area: assist; }
 .panel-notes { grid-area: notes; }
+.split-resizer-main { grid-area: resize-main; }
+.split-resizer-notes { grid-area: resize-notes; }
+
+.split-resizer {
+  align-self: stretch;
+  background: transparent;
+  border: 0;
+  border-radius: 999px;
+  box-shadow: none;
+  color: var(--border-strong);
+  cursor: col-resize;
+  display: flex;
+  justify-content: center;
+  min-width: 6px;
+  padding: 0;
+  touch-action: none;
+  transition: color 0.15s ease, background 0.15s ease;
+}
+
+.split-resizer::before {
+  background: currentColor;
+  border-radius: 999px;
+  content: "";
+  width: 2px;
+}
+
+.split-resizer:hover,
+.split-resizer:focus-visible {
+  background: var(--accent-soft);
+  color: var(--accent);
+  filter: none;
+  outline: none;
+  transform: none;
+}
+
+.split-resizer-notes {
+  display: none;
+}
+
+.is-column-resizing,
+.is-column-resizing * {
+  cursor: col-resize !important;
+  user-select: none;
+}
 
 @media (min-width: 1560px) {
   .workspace-split {
-    grid-template-columns: 1.6fr 1fr 1.15fr;
-    grid-template-areas: "transcript assist notes";
+    grid-template-areas: "transcript resize-main assist resize-notes notes";
+    grid-template-columns:
+      minmax(360px, var(--workspace-transcript-column))
+      6px
+      minmax(280px, var(--workspace-assist-column))
+      6px
+      minmax(320px, var(--workspace-notes-column));
+  }
+
+  .split-resizer-notes {
+    display: flex;
   }
 }
 
@@ -802,6 +912,7 @@ pre {
 /* ------------------------------------------------------------ Assist now -- */
 
 .assist-feed {
+  align-content: start;
   display: grid;
   gap: 11px;
   max-height: 56vh;
@@ -810,6 +921,7 @@ pre {
 }
 
 .assist-item {
+  align-content: start;
   background: var(--surface-2);
   border: 1px solid var(--border);
   border-left: 3px solid var(--border-strong);
@@ -942,14 +1054,19 @@ p.assist-question {
 }
 
 .kw-row {
+  align-items: flex-start;
   display: flex;
   flex-wrap: wrap;
   gap: 5px;
 }
 
 .kw {
+  align-items: center;
+  display: inline-flex;
+  flex: none;
   font-family: var(--font-mono);
   font-size: 10.5px;
+  line-height: 1.35;
   padding: 2px 7px;
   border-radius: 6px;
   background: var(--bg);
@@ -1041,46 +1158,86 @@ p.assist-question {
 }
 
 /* ----------------------------------------------- Full-height workspace ---- */
-/* On the meeting workspace route (scoped via .main.full-height) the view fills
-   the viewport and each panel scrolls internally, instead of the whole page. */
 
-@media (min-width: 1081px) {
+.panel-transcript,
+.panel-assist,
+.panel-notes {
+  min-width: 0;
+}
+
+@media (min-width: 1081px) and (max-width: 1559px) {
   .main.full-height {
-    height: 100vh;
-    overflow: hidden;
+    min-height: 100vh;
+    overflow: visible;
+    padding-bottom: 64px;
+  }
+
+  .main.full-height .workspace-split {
+    grid-template-rows: minmax(430px, calc(100vh - 220px)) auto;
+  }
+
+  .main.full-height .panel-transcript,
+  .main.full-height .panel-assist {
     display: flex;
     flex-direction: column;
+    height: 100%;
+    min-height: 430px;
+    overflow: hidden;
+  }
+
+  .main.full-height .transcript-head,
+  .main.full-height .rail-eyebrow {
+    flex: none;
+  }
+
+  .main.full-height .transcript-feed,
+  .main.full-height .assist-feed {
+    flex: 1;
+    min-height: 0;
+    max-height: none;
+    overflow-y: auto;
+  }
+
+  .main.full-height .panel-notes {
+    min-height: 300px;
+  }
+}
+
+@media (min-width: 1560px) {
+  .main.full-height {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    overflow: hidden;
     padding-bottom: 28px;
   }
 
-  .main.full-height .live-workspace {
-    display: flex;
-    flex-direction: column;
-    flex: 1;
-    min-height: 0;
-  }
-
-  .main.full-height .console-bar,
+  .main.full-height .meeting-header,
   .main.full-height .console-strip {
     flex: none;
   }
 
+  .main.full-height .live-workspace {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-height: 0;
+  }
+
   .main.full-height .workspace-split {
     flex: 1;
+    grid-template-rows: minmax(0, 1fr);
     min-height: 0;
-    /* Default 2-area layout: bound both rows so each panel scrolls. */
-    grid-template-rows: minmax(0, 1.5fr) minmax(0, 1fr);
   }
 
   .main.full-height .workspace-split > .card {
+    display: flex;
+    flex-direction: column;
     height: 100%;
     min-height: 0;
     overflow: hidden;
-    display: flex;
-    flex-direction: column;
   }
 
-  /* The header within each panel stays put; the body fills and scrolls. */
   .main.full-height .transcript-head,
   .main.full-height .rail-eyebrow {
     flex: none;
@@ -1090,16 +1247,9 @@ p.assist-question {
   .main.full-height .assist-feed,
   .main.full-height .notes-body {
     flex: 1;
-    min-height: 0;
     max-height: none;
+    min-height: 0;
     overflow-y: auto;
-  }
-}
-
-/* Wide: the workspace is a single row of three columns. */
-@media (min-width: 1560px) {
-  .main.full-height .workspace-split {
-    grid-template-rows: minmax(0, 1fr);
   }
 }
 
@@ -1376,8 +1526,34 @@ p.assist-question {
 
 @media (max-width: 1080px) {
   .workspace-split {
-    grid-template-columns: 1fr;
     grid-template-areas: "transcript" "assist" "notes";
+    grid-template-columns: 1fr;
+    row-gap: 18px;
+  }
+
+  .split-resizer {
+    display: none;
+  }
+}
+
+@media (max-width: 1180px) {
+  .meeting-header {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .meeting-toolbar {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    justify-content: flex-start;
+  }
+
+  .meeting-toolbar .console-controls {
+    justify-content: flex-start;
+  }
+
+  .meeting-header-actions {
+    grid-column: 2;
+    grid-row: 1;
   }
 }
 
@@ -1413,6 +1589,17 @@ p.assist-question {
     grid-template-columns: 1fr;
   }
   .meeting-header {
-    display: grid;
+    grid-template-columns: 1fr;
+  }
+  .meeting-toolbar,
+  .meeting-header-actions {
+    grid-column: 1;
+    grid-row: auto;
+  }
+  .meeting-header-actions {
+    justify-self: stretch;
+  }
+  .meeting-header-actions button {
+    width: 100%;
   }
 }

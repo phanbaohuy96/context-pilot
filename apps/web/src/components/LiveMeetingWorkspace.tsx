@@ -1,5 +1,6 @@
 "use client";
 
+import type { CSSProperties, KeyboardEvent, PointerEvent, ReactNode } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 type MeetingStatus = "ACTIVE" | "ENDED" | "ERROR";
@@ -96,12 +97,14 @@ type CaptureStatus = {
 
 type LiveMeetingWorkspaceProps = {
   meetingId: string;
+  title: string;
   status: MeetingStatus;
   platform: string;
   startedLabel: string;
   audioSource: string;
   linkedSource: string | null;
   importMediaFile: string | null;
+  headerAction: ReactNode;
   initialUtterances: Utterance[];
   initialInsights: Insight[];
   initialSummaries: Summary[];
@@ -109,12 +112,14 @@ type LiveMeetingWorkspaceProps = {
 
 export function LiveMeetingWorkspace({
   meetingId,
+  title,
   status,
   platform,
   startedLabel,
   audioSource,
   linkedSource,
   importMediaFile,
+  headerAction,
   initialUtterances,
   initialInsights,
   initialSummaries,
@@ -136,6 +141,19 @@ export function LiveMeetingWorkspace({
   const [speakerError, setSpeakerError] = useState("");
   const [diarizePending, setDiarizePending] = useState(false);
   const [diarizeError, setDiarizeError] = useState("");
+  const [wideColumns, setWideColumns] = useState({ transcript: 1.6, assist: 1, notes: 1.15 });
+  const [topColumns, setTopColumns] = useState({ transcript: 1.6, assist: 1 });
+
+  const transcriptPanelRef = useRef<HTMLElement>(null);
+  const assistPanelRef = useRef<HTMLElement>(null);
+  const notesPanelRef = useRef<HTMLElement>(null);
+  const workspaceStyle = {
+    "--workspace-transcript-column": `${wideColumns.transcript}fr`,
+    "--workspace-assist-column": `${wideColumns.assist}fr`,
+    "--workspace-notes-column": `${wideColumns.notes}fr`,
+    "--workspace-top-transcript-column": `${topColumns.transcript}fr`,
+    "--workspace-top-assist-column": `${topColumns.assist}fr`,
+  } as CSSProperties;
 
   const capturingRef = useRef(false);
   const active = meetingStatus === "ACTIVE";
@@ -269,6 +287,62 @@ export function LiveMeetingWorkspace({
     }
   }
 
+  function beginColumnResize(target: ColumnResizeTarget, event: PointerEvent<HTMLElement>): void {
+    event.preventDefault();
+    const transcriptWidth = transcriptPanelRef.current?.getBoundingClientRect().width ?? 0;
+    const assistWidth = assistPanelRef.current?.getBoundingClientRect().width ?? 0;
+    const notesWidth = notesPanelRef.current?.getBoundingClientRect().width ?? 0;
+    const startX = event.clientX;
+    const wide = window.matchMedia("(min-width: 1560px)").matches;
+
+    const onMove = (moveEvent: globalThis.PointerEvent) => {
+      const dx = moveEvent.clientX - startX;
+      if (target === "transcript-assist") {
+        const total = transcriptWidth + assistWidth;
+        const transcript = clamp(transcriptWidth + dx, MIN_TRANSCRIPT_COLUMN, total - MIN_ASSIST_COLUMN);
+        const assist = total - transcript;
+        if (wide) {
+          setWideColumns({ transcript, assist, notes: notesWidth || wideColumns.notes });
+        } else {
+          setTopColumns({ transcript, assist });
+        }
+        return;
+      }
+
+      const total = assistWidth + notesWidth;
+      const assist = clamp(assistWidth + dx, MIN_ASSIST_COLUMN, total - MIN_NOTES_COLUMN);
+      setWideColumns({ transcript: transcriptWidth || wideColumns.transcript, assist, notes: total - assist });
+    };
+
+    const onUp = () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      document.body.classList.remove("is-column-resizing");
+    };
+
+    document.body.classList.add("is-column-resizing");
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp, { once: true });
+  }
+
+  function nudgeColumnResize(target: ColumnResizeTarget, event: KeyboardEvent<HTMLElement>): void {
+    if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") {
+      return;
+    }
+    event.preventDefault();
+    const direction = event.key === "ArrowLeft" ? -1 : 1;
+    const wide = window.matchMedia("(min-width: 1560px)").matches;
+    if (target === "transcript-assist") {
+      if (wide) {
+        setWideColumns((current) => rebalanceColumns(current, "transcript", "assist", direction));
+      } else {
+        setTopColumns((current) => rebalanceColumns(current, "transcript", "assist", direction));
+      }
+    } else if (wide) {
+      setWideColumns((current) => rebalanceColumns(current, "assist", "notes", direction));
+    }
+  }
+
   const speakerAliases = useMemo(() => buildSpeakerAliases(utterances), [utterances]);
   const hasDiarizedSpeakers = utterances.some((utterance) => Boolean(speakerIdentityKey(utterance)));
   const hasImportedRemoteUtterances = utterances.some((utterance) => utterance.speakerRole === "OTHER" && utterance.sourceChannel === "IMPORTED");
@@ -353,7 +427,6 @@ export function LiveMeetingWorkspace({
     }
   }
 
-  const latestCaption = useMemo(() => utterances[utterances.length - 1], [utterances]);
   // Synthesized rolling notes come from the latest MeetingSummary (newest first).
   const latestNotes = summaries[0];
   const hasNotes = Boolean(
@@ -394,69 +467,67 @@ export function LiveMeetingWorkspace({
   }, [utterances]);
 
   return (
-    <section className="live-workspace">
-      {/* Slim console bar — status + listening controls, kept out of the way so the
-          three focus panels (transcript, assist, notes) lead. */}
-      <section className={`console-bar${capturing ? " is-live" : ""}`}>
-        <div className="console-status">
-          <span className={`live-pill ${capturing ? "is-live" : active ? "is-idle" : ""}`}>
+    <>
+      <header className={`page-header meeting-header${capturing ? " is-live" : ""}`}>
+        <div className="meeting-title">
+          <h2>{title}</h2>
+        </div>
+        <div className={`console-bar meeting-toolbar${capturing ? " is-live" : ""}`}>
+          <div className="console-status">
+            <span className={`live-pill ${capturing ? "is-live" : active ? "is-idle" : ""}`}>
+              {capturing ? (
+                <span className="eq" aria-hidden>
+                  <span /><span /><span /><span /><span />
+                </span>
+              ) : (
+                <span className="rec-dot" aria-hidden />
+              )}
+              {capturing ? "On air" : active ? "Idle" : meetingStatus}
+            </span>
+            <span className="session-meta">
+              <span className="badge">{platform}</span>
+              <span className="meta-item">{startedLabel}</span>
+              <span className="meta-item">{audioSource}</span>
+              {linkedSource ? <span className="meta-item">{linkedSource}</span> : null}
+            </span>
+          </div>
+
+          <div className="console-controls">
+            <label className="inline-select" title="Your microphone (your voice)">
+              <span aria-hidden>🎙</span>
+              <select value={micInput} onChange={(event) => setMicInput(event.target.value)} disabled={!active}>
+                <option value="">Mic: off</option>
+                {devices.map((device) => (
+                  <option key={`mic-${device.index}`} value={device.index}>{device.name}</option>
+                ))}
+              </select>
+            </label>
+            <label className="inline-select" title="Meeting audio — others (system/loopback)">
+              <span aria-hidden>🔊</span>
+              <select value={meetingInput} onChange={(event) => setMeetingInput(event.target.value)} disabled={!active}>
+                <option value="">Others: off</option>
+                {devices.map((device) => (
+                  <option key={`meeting-${device.index}`} value={device.index}>
+                    {device.name}{isLoopbackDevice(device) ? " (loopback)" : ""}
+                  </option>
+                ))}
+              </select>
+            </label>
             {capturing ? (
-              <span className="eq" aria-hidden>
-                <span /><span /><span /><span /><span />
-              </span>
+              <button type="button" className="danger" onClick={() => void stopCapture()} disabled={capturePending}>
+                ■ Stop
+              </button>
             ) : (
-              <span className="rec-dot" aria-hidden />
+              <button type="button" onClick={() => void startCapture()} disabled={!active || capturePending}>
+                ● Start listening
+              </button>
             )}
-            {capturing ? "On air" : active ? "Idle" : meetingStatus}
-          </span>
-          <span className="session-meta">
-            <span className="badge">{platform}</span>
-            <span className="meta-item">{startedLabel}</span>
-            <span className="meta-item">{audioSource}</span>
-            {linkedSource ? <span className="meta-item">{linkedSource}</span> : null}
-          </span>
-          <span className="console-ticker" title={latestCaption?.text}>
-            {latestCaption ? (
-              <><span className="console-ticker-who">{displaySpeaker(latestCaption, speakerAliases)}:</span> {latestCaption.text}</>
-            ) : (
-              <span className="muted">Start listening to caption the meeting audio or your microphone.</span>
-            )}
-          </span>
+          </div>
         </div>
+        <div className="meeting-header-actions">{headerAction}</div>
+      </header>
 
-        <div className="console-controls">
-          <label className="inline-select" title="Your microphone (your voice)">
-            <span aria-hidden>🎙</span>
-            <select value={micInput} onChange={(event) => setMicInput(event.target.value)} disabled={!active}>
-              <option value="">Mic: off</option>
-              {devices.map((device) => (
-                <option key={`mic-${device.index}`} value={device.index}>{device.name}</option>
-              ))}
-            </select>
-          </label>
-          <label className="inline-select" title="Meeting audio — others (system/loopback)">
-            <span aria-hidden>🔊</span>
-            <select value={meetingInput} onChange={(event) => setMeetingInput(event.target.value)} disabled={!active}>
-              <option value="">Others: off</option>
-              {devices.map((device) => (
-                <option key={`meeting-${device.index}`} value={device.index}>
-                  {device.name}{isLoopbackDevice(device) ? " (loopback)" : ""}
-                </option>
-              ))}
-            </select>
-          </label>
-          {capturing ? (
-            <button type="button" className="danger" onClick={() => void stopCapture()} disabled={capturePending}>
-              ■ Stop
-            </button>
-          ) : (
-            <button type="button" onClick={() => void startCapture()} disabled={!active || capturePending}>
-              ● Start listening
-            </button>
-          )}
-        </div>
-      </section>
-
+      <section className="live-workspace">
       {(captureError || micOnlyWarning || (!hasLoopbackDevice && active) || capture?.sources.length) ? (
         <div className="console-strip">
           {captureError ? <span className="badge danger">{captureError}</span> : null}
@@ -473,10 +544,8 @@ export function LiveMeetingWorkspace({
         </div>
       ) : null}
 
-      {/* The transcript leads, Assist beside it, and Meeting notes reflows below
-          (or into a right column on wide screens). */}
-      <section className="workspace-split">
-        <section className="card transcript-card panel-transcript">
+      <section className="workspace-split" style={workspaceStyle}>
+        <section className="card transcript-card panel-transcript" ref={transcriptPanelRef}>
           <div className="transcript-head">
             <h3>
               Transcript
@@ -554,7 +623,17 @@ export function LiveMeetingWorkspace({
           </div>
         </section>
 
-          <section className="card panel-assist">
+        <button
+          type="button"
+          className="split-resizer split-resizer-main"
+          role="separator"
+          aria-label="Resize transcript and assist panels"
+          aria-orientation="vertical"
+          onPointerDown={(event) => beginColumnResize("transcript-assist", event)}
+          onKeyDown={(event) => nudgeColumnResize("transcript-assist", event)}
+        />
+
+        <section className="card panel-assist" ref={assistPanelRef}>
             <div className="rail-eyebrow">
               <h3>Assist now</h3>
               <span className="rail-count">{assistItems.length || ""}</span>
@@ -594,9 +673,19 @@ export function LiveMeetingWorkspace({
             ) : (
               <p className="muted">Questions, answer ideas, and action requests surface here the moment they’re heard.</p>
             )}
-          </section>
+        </section>
 
-          <section className="card panel-notes">
+        <button
+          type="button"
+          className="split-resizer split-resizer-notes"
+          role="separator"
+          aria-label="Resize assist and meeting notes panels"
+          aria-orientation="vertical"
+          onPointerDown={(event) => beginColumnResize("assist-notes", event)}
+          onKeyDown={(event) => nudgeColumnResize("assist-notes", event)}
+        />
+
+        <section className="card panel-notes" ref={notesPanelRef}>
             <div className="rail-eyebrow">
               <h3>Meeting notes</h3>
               {latestNotes ? <span className="rail-count">synthesized</span> : null}
@@ -640,10 +729,32 @@ export function LiveMeetingWorkspace({
                 <p className="muted">Synthesized briefing, action items, and open questions appear once enough of the meeting has been heard.</p>
               </div>
             )}
-          </section>
+        </section>
       </section>
     </section>
+    </>
   );
+}
+
+type ColumnResizeTarget = "transcript-assist" | "assist-notes";
+
+const MIN_TRANSCRIPT_COLUMN = 360;
+const MIN_ASSIST_COLUMN = 280;
+const MIN_NOTES_COLUMN = 320;
+const KEYBOARD_COLUMN_STEP = 0.04;
+
+function clamp(value: number, min: number, max: number): number {
+  if (max < min) {
+    return min;
+  }
+  return Math.min(Math.max(value, min), max);
+}
+
+function rebalanceColumns<T extends Record<string, number>>(columns: T, growKey: keyof T, shrinkKey: keyof T, direction: number): T {
+  const total = columns[growKey] + columns[shrinkKey];
+  const minimum = total * 0.18;
+  const nextGrow = clamp(columns[growKey] + (total * KEYBOARD_COLUMN_STEP * direction), minimum, total - minimum);
+  return { ...columns, [growKey]: nextGrow, [shrinkKey]: total - nextGrow } as T;
 }
 
 const LOOPBACK_PATTERN = /blackhole|aggregate|multi-?output|loopback|soundflower|virtual/i;

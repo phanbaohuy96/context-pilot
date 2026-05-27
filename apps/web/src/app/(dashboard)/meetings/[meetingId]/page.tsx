@@ -64,53 +64,48 @@ export default async function MeetingWorkspacePage({ params }: MeetingWorkspaceP
   meeting.utterances.reverse();
 
   return (
-    <>
-      <header className="page-header meeting-header">
-        <div>
-          <h2>{meeting.title}</h2>
-        </div>
+    <LiveMeetingWorkspace
+      meetingId={meeting.id}
+      title={meeting.title}
+      status={meeting.status}
+      platform={meeting.platform}
+      startedLabel={meeting.startedAt.toISOString().slice(0, 16).replace("T", " ")}
+      audioSource={meeting.externalContextId ?? "mic + meeting audio"}
+      linkedSource={meeting.source?.displayName ?? null}
+      importMediaFile={importedMediaFileName(meeting.externalContextId)}
+      headerAction={(
         <form action={endMeeting}>
           <input type="hidden" name="meetingId" value={meeting.id} />
           <button className="danger" type="submit" disabled={meeting.status === "ENDED"}>End session</button>
         </form>
-      </header>
-
-      <LiveMeetingWorkspace
-        meetingId={meeting.id}
-        status={meeting.status}
-        platform={meeting.platform}
-        startedLabel={meeting.startedAt.toISOString().slice(0, 16).replace("T", " ")}
-        audioSource={meeting.externalContextId ?? "mic + meeting audio"}
-        linkedSource={meeting.source?.displayName ?? null}
-        importMediaFile={importedMediaFileName(meeting.externalContextId)}
-        initialUtterances={meeting.utterances.map((utterance) => ({
-          id: utterance.id,
-          speakerRole: utterance.speakerRole,
-          sourceChannel: utterance.sourceChannel,
-          startedAt: utterance.startedAt.toISOString(),
-          text: utterance.text,
-          interim: (utterance.engineMetadata as { interim?: boolean } | null)?.interim === true,
-          speakerKey: speakerKeyFromMetadata(utterance.engineMetadata),
-          speakerLabel: speakerLabelFromMetadata(utterance.engineMetadata),
-          speakerAlias: speakerAliasFromMetadata(utterance.engineMetadata),
-        }))}
-        initialInsights={meeting.insights.map((insight) => ({
-          id: insight.id,
-          kind: insight.kind,
-          text: insight.text,
-          keywords: insight.keywords,
-          relatedUtteranceIds: insight.relatedUtteranceIds,
-          createdAt: insight.createdAt.toISOString(),
-        }))}
-        initialSummaries={meeting.summaries.map((summary) => ({
-          id: summary.id,
-          summary: summary.summary,
-          openQuestions: summary.openQuestions,
-          actionItems: summary.actionItems,
-          model: summary.model,
-          createdAt: summary.createdAt.toISOString(),
-        }))}
-      />
-    </>
+      )}
+      initialUtterances={meeting.utterances.map((utterance) => ({
+        id: utterance.id,
+        speakerRole: utterance.speakerRole,
+        sourceChannel: utterance.sourceChannel,
+        startedAt: utterance.startedAt.toISOString(),
+        text: utterance.text,
+        interim: (utterance.engineMetadata as { interim?: boolean } | null)?.interim === true,
+        speakerKey: speakerKeyFromMetadata(utterance.engineMetadata),
+        speakerLabel: speakerLabelFromMetadata(utterance.engineMetadata),
+        speakerAlias: speakerAliasFromMetadata(utterance.engineMetadata),
+      }))}
+      initialInsights={meeting.insights.map((insight) => ({
+        id: insight.id,
+        kind: insight.kind,
+        text: insight.text,
+        keywords: insight.keywords,
+        relatedUtteranceIds: insight.relatedUtteranceIds,
+        createdAt: insight.createdAt.toISOString(),
+      }))}
+      initialSummaries={meeting.summaries.map((summary) => ({
+        id: summary.id,
+        summary: summary.summary,
+        openQuestions: summary.openQuestions,
+        actionItems: summary.actionItems,
+        model: summary.model,
+        createdAt: summary.createdAt.toISOString(),
+      }))}
+    />
   );
 }
