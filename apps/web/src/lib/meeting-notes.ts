@@ -1,11 +1,11 @@
-import { createAiProvider, promptVersion, type AiProviderKind } from "@teams-observer/ai";
+import { createAiProvider, promptVersion, type AiProviderKind } from "@context-pilot/ai";
 import {
   speakerAliasFromMetadata,
   speakerKeyFromMetadata,
   speakerLabelFromMetadata,
   type MeetingTranscriptLine,
-} from "@teams-observer/core";
-import { prisma } from "@teams-observer/db";
+} from "@context-pilot/core";
+import { prisma } from "@context-pilot/db";
 import type { TranscriptUtterance } from "@prisma/client";
 
 // Regenerate rolling notes after this many new finalized utterances since the last run.

@@ -1,7 +1,7 @@
 import { revalidatePath } from "next/cache";
 import { NextResponse } from "next/server";
-import { updateMeetingSessionSchema } from "@teams-observer/core";
-import { prisma } from "@teams-observer/db";
+import { updateMeetingSessionSchema } from "@context-pilot/core";
+import { prisma } from "@context-pilot/db";
 
 export const dynamic = "force-dynamic";
 

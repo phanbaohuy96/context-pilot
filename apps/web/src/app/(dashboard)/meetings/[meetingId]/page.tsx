@@ -1,7 +1,7 @@
 import { revalidatePath } from "next/cache";
 import { notFound } from "next/navigation";
-import { speakerAliasFromMetadata, speakerKeyFromMetadata, speakerLabelFromMetadata } from "@teams-observer/core";
-import { prisma } from "@teams-observer/db";
+import { speakerAliasFromMetadata, speakerKeyFromMetadata, speakerLabelFromMetadata } from "@context-pilot/core";
+import { prisma } from "@context-pilot/db";
 import { stopCapture } from "../../../../lib/capture/manager";
 import { LiveMeetingWorkspace } from "../../../../components/LiveMeetingWorkspace";
 import { importedMediaFileName } from "../../../../lib/imported-diarization";

@@ -1,4 +1,4 @@
-import { sanitizeTeamsHtml, teamsHtmlToText, type NormalizedTeamsMessage } from "@teams-observer/core";
+import { sanitizeTeamsHtml, teamsHtmlToText, type NormalizedTeamsMessage } from "@context-pilot/core";
 
 type GraphIdentity = {
   id?: string;

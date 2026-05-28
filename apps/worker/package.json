@@ -1,5 +1,5 @@
 {
-  "name": "@teams-observer/worker",
+  "name": "@context-pilot/worker",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -9,10 +9,10 @@
   },
   "dependencies": {
     "@prisma/client": "^6.8.2",
-    "@teams-observer/ai": "0.1.0",
-    "@teams-observer/core": "0.1.0",
-    "@teams-observer/db": "0.1.0",
-    "@teams-observer/graph": "0.1.0",
+    "@context-pilot/ai": "0.1.0",
+    "@context-pilot/core": "0.1.0",
+    "@context-pilot/db": "0.1.0",
+    "@context-pilot/graph": "0.1.0",
     "bullmq": "^5.52.2",
     "dotenv": "^16.5.0",
     "ioredis": "^5.6.1",

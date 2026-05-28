@@ -1,4 +1,4 @@
-import type { AgentAnswer, AgentContextBundle, MeetingNotesContext } from "@teams-observer/core";
+import type { AgentAnswer, AgentContextBundle, MeetingNotesContext } from "@context-pilot/core";
 import { buildAnswerPrompt } from "../prompts/answer";
 import { buildMeetingNotesPrompt } from "../prompts/meeting-notes";
 import { buildRequirementsPrompt } from "../prompts/requirements";

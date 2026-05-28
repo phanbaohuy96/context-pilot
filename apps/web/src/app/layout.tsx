@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Teams Discovery Observer",
+  title: "ContextPilot",
   description: "Teams discovery ingestion, summarization, and quoting evidence workspace.",
 };
 

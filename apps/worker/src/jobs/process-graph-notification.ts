@@ -5,9 +5,9 @@ import {
   queueNames,
   validateClientState,
   type GraphNotificationJobData,
-} from "@teams-observer/core";
-import { prisma } from "@teams-observer/db";
-import { normalizeGraphChatMessage, resolveMessageIdFromNotification } from "@teams-observer/graph";
+} from "@context-pilot/core";
+import { prisma } from "@context-pilot/db";
+import { normalizeGraphChatMessage, resolveMessageIdFromNotification } from "@context-pilot/graph";
 import { getGraphClient, requiredEnv } from "../lib/env";
 import { createSummarizeThreadQueue } from "../lib/queues";
 

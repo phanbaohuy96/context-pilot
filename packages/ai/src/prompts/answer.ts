@@ -1,4 +1,4 @@
-import type { AgentContextBundle } from "@teams-observer/core";
+import type { AgentContextBundle } from "@context-pilot/core";
 import { renderContextBundle, safetySystemPrompt } from "./context";
 
 export function buildAnswerPrompt(input: AgentContextBundle & { question: string }): string {

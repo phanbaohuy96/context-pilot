@@ -1,10 +1,10 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   transpilePackages: [
-    "@teams-observer/ai",
-    "@teams-observer/core",
-    "@teams-observer/db",
-    "@teams-observer/graph",
+    "@context-pilot/ai",
+    "@context-pilot/core",
+    "@context-pilot/db",
+    "@context-pilot/graph",
   ],
   serverExternalPackages: ["@prisma/client"],
 };

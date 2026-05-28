@@ -15,10 +15,10 @@
     "forceConsistentCasingInFileNames": true,
     "baseUrl": ".",
     "paths": {
-      "@teams-observer/ai": ["packages/ai/src/index.ts"],
-      "@teams-observer/core": ["packages/core/src/index.ts"],
-      "@teams-observer/db": ["packages/db/src/index.ts"],
-      "@teams-observer/graph": ["packages/graph/src/index.ts"]
+      "@context-pilot/ai": ["packages/ai/src/index.ts"],
+      "@context-pilot/core": ["packages/core/src/index.ts"],
+      "@context-pilot/db": ["packages/db/src/index.ts"],
+      "@context-pilot/graph": ["packages/graph/src/index.ts"]
     }
   },
   "include": [

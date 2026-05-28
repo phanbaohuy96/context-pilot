@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { prisma } from "@teams-observer/db";
+import { prisma } from "@context-pilot/db";
 
 const updateSchema = z.object({
   id: z.string().min(1),

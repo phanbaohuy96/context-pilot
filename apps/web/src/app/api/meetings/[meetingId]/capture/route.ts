@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@teams-observer/db";
+import { prisma } from "@context-pilot/db";
 import { getCaptureStatus, startCapture, stopCapture } from "../../../../../lib/capture/manager";
 
 export const dynamic = "force-dynamic";

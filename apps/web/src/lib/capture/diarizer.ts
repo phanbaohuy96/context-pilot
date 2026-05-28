@@ -5,7 +5,7 @@ import { join } from "node:path";
 // Voice-embedding extraction for speaker diarization. Wraps a local ONNX speaker
 // model (wavlm-base-plus-sv) run through transformers.js / onnxruntime. The model is
 // loaded once and downloaded to the project cache on first use. Pure clustering of
-// the embeddings it returns lives in @teams-observer/core.
+// the embeddings it returns lives in @context-pilot/core.
 
 type XVectorProcessor = (audio: Float32Array) => Promise<Record<string, unknown>>;
 type XVectorModel = (inputs: Record<string, unknown>) => Promise<{ embeddings: { tolist(): number[][] } }>;
@@ -58,7 +58,7 @@ async function load(): Promise<{ processor: XVectorProcessor; model: XVectorMode
       // Imported lazily so the heavy native runtime only loads when diarization runs.
       const { AutoProcessor, AutoModelForXVector, env } = await import("@huggingface/transformers");
       env.cacheDir = process.env.MEETING_DIARIZATION_MODEL_CACHE
-        ?? join(homedir(), ".cache", "teams-discovery-observer", "models", "transformers");
+        ?? join(homedir(), ".cache", "context-pilot", "models", "transformers");
       const processor = (await AutoProcessor.from_pretrained(modelId())) as unknown as XVectorProcessor;
       const model = (await AutoModelForXVector.from_pretrained(modelId())) as unknown as XVectorModel;
       return { processor, model };

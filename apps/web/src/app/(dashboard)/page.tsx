@@ -1,4 +1,4 @@
-import { prisma } from "@teams-observer/db";
+import { prisma } from "@context-pilot/db";
 import { StatCard } from "../../components/StatCard";
 
 export const dynamic = "force-dynamic";

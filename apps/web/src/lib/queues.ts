@@ -1,6 +1,6 @@
 import { Queue } from "bullmq";
 import IORedis from "ioredis";
-import { queueNames, type GraphNotificationJobData, type SummarizeThreadJobData } from "@teams-observer/core";
+import { queueNames, type GraphNotificationJobData, type SummarizeThreadJobData } from "@context-pilot/core";
 
 const globalForQueues = globalThis as unknown as {
   redisConnection?: IORedis;

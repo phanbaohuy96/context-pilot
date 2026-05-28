@@ -7,7 +7,7 @@ TEST_NAME ?=
 .PHONY: help install services-up services-down db-generate db-migrate db-studio dev dev-web dev-worker build typecheck test test-watch test-file test-name verify
 
 help:
-	@printf "Teams Discovery Observer commands:\n"
+	@printf "ContextPilot commands:\n"
 	@printf "  make install                 Install npm dependencies\n"
 	@printf "  make services-up             Start local Postgres and Redis\n"
 	@printf "  make services-down           Stop local Postgres and Redis\n"

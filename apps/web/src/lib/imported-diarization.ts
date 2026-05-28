@@ -11,8 +11,8 @@ import {
   metadataWithDiarizedSpeaker,
   speakerLabel,
   type SpeakerCluster,
-} from "@teams-observer/core";
-import { prisma } from "@teams-observer/db";
+} from "@context-pilot/core";
+import { prisma } from "@context-pilot/db";
 import { embedSpeaker, speakerSimilarityThreshold } from "./capture/diarizer";
 
 const MIN_UTTERANCE_SECONDS = 1.2;

@@ -38,4 +38,4 @@ async function shutdown(): Promise<void> {
 process.on("SIGINT", () => void shutdown());
 process.on("SIGTERM", () => void shutdown());
 
-console.log("Teams Discovery Observer worker started.");
+console.log("ContextPilot worker started.");

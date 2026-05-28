@@ -1,5 +1,5 @@
 {
-  "name": "@teams-observer/meeting-capture",
+  "name": "@context-pilot/meeting-capture",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -8,6 +8,6 @@
     "start": "tsx src/index.ts"
   },
   "dependencies": {
-    "@teams-observer/core": "0.1.0"
+    "@context-pilot/core": "0.1.0"
   }
 }

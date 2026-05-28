@@ -1,7 +1,7 @@
 import type { Job } from "bullmq";
-import { createAiProvider, promptVersion } from "@teams-observer/ai";
-import type { SummarizeThreadJobData } from "@teams-observer/core";
-import { prisma } from "@teams-observer/db";
+import { createAiProvider, promptVersion } from "@context-pilot/ai";
+import type { SummarizeThreadJobData } from "@context-pilot/core";
+import { prisma } from "@context-pilot/db";
 
 export async function summarizeThreadJob(job: Job<SummarizeThreadJobData>): Promise<void> {
   const source = await prisma.monitoredSource.findUnique({ where: { id: job.data.sourceId } });

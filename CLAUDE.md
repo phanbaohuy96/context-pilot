@@ -23,7 +23,7 @@ There is no dedicated lint script configured; use `npm run typecheck`, `npm test
 
 Local development expects `.env` values matching `.env.example`. Postgres and Redis are provided by `docker-compose.yml`; `DATABASE_URL` and `REDIS_URL` default to those local services. Microsoft Graph integration also needs `AZURE_TENANT_ID`, `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET`, `GRAPH_CLIENT_STATE`, and a public `GRAPH_WEBHOOK_URL` for real webhook testing.
 
-The meeting assistant needs local audio tooling on macOS: `ffmpeg` and `whisper-cli` (whisper.cpp), a Whisper model (default `~/.cache/teams-discovery-observer/models/ggml-tiny.en.bin`), and a loopback device (BlackHole + a Multi-Output Device) to caption system audio. Capture tuning uses `MEETING_CAPTURE_*` env vars (see `.env.example` and `docs/features/meeting-assistant.md`).
+The meeting assistant needs local audio tooling on macOS: `ffmpeg` and `whisper-cli` (whisper.cpp), a Whisper model (default `~/.cache/context-pilot/models/ggml-tiny.en.bin`), and a loopback device (BlackHole + a Multi-Output Device) to caption system audio. Capture tuning uses `MEETING_CAPTURE_*` env vars (see `.env.example` and `docs/features/meeting-assistant.md`).
 
 ## Architecture
 

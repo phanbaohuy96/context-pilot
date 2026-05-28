@@ -1,5 +1,5 @@
-import { prisma } from "@teams-observer/db";
-import { defaultSubscriptionExpiration, renewTeamsMessageSubscription } from "@teams-observer/graph";
+import { prisma } from "@context-pilot/db";
+import { defaultSubscriptionExpiration, renewTeamsMessageSubscription } from "@context-pilot/graph";
 import { getGraphClient, hasGraphConfig } from "../lib/env";
 
 export async function renewGraphSubscriptions(): Promise<void> {

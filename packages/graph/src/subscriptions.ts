@@ -1,4 +1,4 @@
-import { sha256, type SourceType } from "@teams-observer/core";
+import { sha256, type SourceType } from "@context-pilot/core";
 import { MicrosoftGraphClient, type GraphSubscriptionResponse } from "./client";
 import { buildGraphResourceForSource, defaultSubscriptionExpiration } from "./resources";
 

@@ -1,4 +1,4 @@
-# Teams Discovery Observer
+# ContextPilot
 
 A local-first TypeScript monorepo with two cooperating pillars:
 
@@ -49,13 +49,13 @@ See [docs/architecture.md](docs/architecture.md) for the full module map, data m
 
 | Workspace | Package | Responsibility |
 |---|---|---|
-| `apps/web` | `@teams-observer/web` | Next.js App Router dashboard + API routes (ingestion, agent, export, meetings, capture control). |
-| `apps/worker` | `@teams-observer/worker` | BullMQ worker: Graph notification processing, thread summarization, requirement extraction, subscription renewal. |
-| `apps/meeting-capture` | `@teams-observer/meeting-capture` | Standalone CLI capture companion (alternative to the server-managed capture). |
-| `packages/core` | `@teams-observer/core` | Domain schemas/types, queue names, monitoring policy, HTML sanitization, security helpers, meeting-assist heuristics. |
-| `packages/graph` | `@teams-observer/graph` | Microsoft Graph client, Teams resource/subscription helpers, message normalization. |
-| `packages/ai` | `@teams-observer/ai` | AI provider contract, local OpenAI + Claude Code CLI providers, prompt templates. |
-| `packages/db` | `@teams-observer/db` | Prisma client singleton and exports. |
+| `apps/web` | `@context-pilot/web` | Next.js App Router dashboard + API routes (ingestion, agent, export, meetings, capture control). |
+| `apps/worker` | `@context-pilot/worker` | BullMQ worker: Graph notification processing, thread summarization, requirement extraction, subscription renewal. |
+| `apps/meeting-capture` | `@context-pilot/meeting-capture` | Standalone CLI capture companion (alternative to the server-managed capture). |
+| `packages/core` | `@context-pilot/core` | Domain schemas/types, queue names, monitoring policy, HTML sanitization, security helpers, meeting-assist heuristics. |
+| `packages/graph` | `@context-pilot/graph` | Microsoft Graph client, Teams resource/subscription helpers, message normalization. |
+| `packages/ai` | `@context-pilot/ai` | AI provider contract, local OpenAI + Claude Code CLI providers, prompt templates. |
+| `packages/db` | `@context-pilot/db` | Prisma client singleton and exports. |
 
 ## Quickstart
 
@@ -91,7 +91,7 @@ The live meeting assistant needs local audio tooling:
 
 - **ffmpeg** — audio capture (`brew install ffmpeg`).
 - **whisper-cli** (whisper.cpp) — local transcription (`brew install whisper-cpp`).
-- **A Whisper model** — defaults to `~/.cache/teams-discovery-observer/models/ggml-tiny.en.bin`.
+- **A Whisper model** — defaults to `~/.cache/context-pilot/models/ggml-tiny.en.bin`.
 - **BlackHole** (loopback) — to caption audio playing *out* of your Mac (`brew install --cask blackhole-2ch`), routed through a macOS **Multi-Output Device** so you can hear and capture at once.
 
 Full setup and the capture pipeline are documented in [docs/features/meeting-assistant.md](docs/features/meeting-assistant.md).

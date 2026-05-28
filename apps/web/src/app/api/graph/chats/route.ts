@@ -1,6 +1,6 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
-import { DelegatedMicrosoftGraphClient } from "@teams-observer/graph";
+import { DelegatedMicrosoftGraphClient } from "@context-pilot/graph";
 
 const accessTokenCookie = "teams_graph_access_token";
 

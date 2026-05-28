@@ -1,4 +1,4 @@
-import type { SourceType } from "@teams-observer/core";
+import type { SourceType } from "@context-pilot/core";
 
 export type GraphSourceIdentifiers = {
   sourceType: SourceType;

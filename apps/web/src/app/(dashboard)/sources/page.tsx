@@ -1,7 +1,7 @@
 import { revalidatePath } from "next/cache";
-import { buildGraphResourceForSource } from "@teams-observer/graph";
-import { isHighSensitivitySource, monitoredSourceInputSchema } from "@teams-observer/core";
-import { prisma } from "@teams-observer/db";
+import { buildGraphResourceForSource } from "@context-pilot/graph";
+import { isHighSensitivitySource, monitoredSourceInputSchema } from "@context-pilot/core";
+import { prisma } from "@context-pilot/db";
 import { SubscribeButton } from "../../../components/SubscribeButton";
 import { TeamsChatPicker } from "../../../components/TeamsChatPicker";
 import { getOrCreateDefaultTenant } from "../../../lib/tenant";

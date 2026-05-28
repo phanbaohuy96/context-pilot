@@ -1,8 +1,8 @@
 import { revalidatePath } from "next/cache";
 import { NextResponse } from "next/server";
 import type { Prisma } from "@prisma/client";
-import { ingestTranscriptUtteranceSchema } from "@teams-observer/core";
-import { prisma } from "@teams-observer/db";
+import { ingestTranscriptUtteranceSchema } from "@context-pilot/core";
+import { prisma } from "@context-pilot/db";
 import { createDeterministicMeetingInsights } from "../../../../../lib/meeting-insights";
 
 export const dynamic = "force-dynamic";

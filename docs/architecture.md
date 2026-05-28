@@ -1,6 +1,6 @@
 # Architecture
 
-Teams Discovery Observer is an npm-workspaces TypeScript monorepo. It is **local-first**: the web app, worker, database, queue, transcription, and (optionally) the LLM all run on the developer's machine.
+ContextPilot is an npm-workspaces TypeScript monorepo. It is **local-first**: the web app, worker, database, queue, transcription, and (optionally) the LLM all run on the developer's machine.
 
 ## Runtime topology
 

@@ -3,7 +3,7 @@ import type {
   AgentContextBundle,
   ExtractedRequirement,
   MeetingNotesContext,
-} from "@teams-observer/core";
+} from "@context-pilot/core";
 
 export type AiProviderKind = "LOCAL_OPENAI" | "CLAUDE_CODE_CLI";
 

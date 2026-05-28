@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
-import { assertSourceCanIngest } from "@teams-observer/core";
-import { createTeamsMessageSubscription } from "@teams-observer/graph";
-import { prisma } from "@teams-observer/db";
+import { assertSourceCanIngest } from "@context-pilot/core";
+import { createTeamsMessageSubscription } from "@context-pilot/graph";
+import { prisma } from "@context-pilot/db";
 import { getGraphClient, getGraphWebhookUrl } from "../../../../lib/graph";
 
 export async function POST(request: Request): Promise<Response> {

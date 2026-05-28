@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
-import { isHighSensitivitySource } from "@teams-observer/core";
-import { prisma } from "@teams-observer/db";
+import { isHighSensitivitySource } from "@context-pilot/core";
+import { prisma } from "@context-pilot/db";
 import { AgentConsole } from "../../../../components/AgentConsole";
 import { SubscribeButton } from "../../../../components/SubscribeButton";
 

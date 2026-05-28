@@ -1,5 +1,5 @@
-import { detectMeetingAssistInsights } from "@teams-observer/core";
-import { prisma } from "@teams-observer/db";
+import { detectMeetingAssistInsights } from "@context-pilot/core";
+import { prisma } from "@context-pilot/db";
 import type { MeetingSpeakerRole } from "@prisma/client";
 
 export async function createDeterministicMeetingInsights(input: {

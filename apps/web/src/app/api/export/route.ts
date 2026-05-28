@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@teams-observer/db";
+import { prisma } from "@context-pilot/db";
 
 export async function GET(): Promise<Response> {
   const [requirements, summaries, messages] = await Promise.all([

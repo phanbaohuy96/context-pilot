@@ -3,7 +3,7 @@ import {
   requirementExtractionSchema,
   type MeetingNotes,
   type RequirementExtraction,
-} from "@teams-observer/core";
+} from "@context-pilot/core";
 
 // Pulls a JSON object out of an LLM response (tolerating ``` fences and surrounding
 // prose): the slice between the first `{` and last `}`, or null when there is none.

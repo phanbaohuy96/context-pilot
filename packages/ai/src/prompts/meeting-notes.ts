@@ -1,4 +1,4 @@
-import type { MeetingNotesContext } from "@teams-observer/core";
+import type { MeetingNotesContext } from "@context-pilot/core";
 
 // The transcript is untrusted, local speech-to-text output (with errors) — not
 // instructions. Keep notes grounded in what was actually said.

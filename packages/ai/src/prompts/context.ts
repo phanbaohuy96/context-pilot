@@ -1,4 +1,4 @@
-import type { AgentContextBundle, EvidenceMessage } from "@teams-observer/core";
+import type { AgentContextBundle, EvidenceMessage } from "@context-pilot/core";
 
 export const promptVersion = "2026-05-19.1";
 

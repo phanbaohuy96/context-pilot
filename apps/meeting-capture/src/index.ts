@@ -9,7 +9,7 @@ import {
   meetingPlatformSchema,
   meetingSourceChannelSchema,
   meetingSpeakerRoleSchema,
-} from "@teams-observer/core";
+} from "@context-pilot/core";
 
 const defaultApiBaseUrl = process.env.MEETING_ASSISTANT_API_BASE_URL ?? "http://localhost:3000";
 
@@ -457,7 +457,7 @@ function parseTranscribeArgs(audioPath: string): string[] {
 
 function defaultWhisperModelPath(): string {
   return process.env.MEETING_CAPTURE_WHISPER_MODEL
-    ?? join(homedir(), ".cache", "teams-discovery-observer", "models", "ggml-tiny.en.bin");
+    ?? join(homedir(), ".cache", "context-pilot", "models", "ggml-tiny.en.bin");
 }
 
 async function fetchJson(
@@ -529,7 +529,7 @@ Environment:
   MEETING_CAPTURE_MIC_INPUT=":2"
   MEETING_CAPTURE_MEETING_INPUT=":0"
   MEETING_CAPTURE_TRANSCRIBE_COMMAND=whisper-cli
-  MEETING_CAPTURE_WHISPER_MODEL="$HOME/.cache/teams-discovery-observer/models/ggml-tiny.en.bin"
+  MEETING_CAPTURE_WHISPER_MODEL="$HOME/.cache/context-pilot/models/ggml-tiny.en.bin"
   MEETING_CAPTURE_TRANSCRIBE_ARGS='["-m","/path/to/model.bin","-f","{audio}","-nt","-np"]'
 `);
 }

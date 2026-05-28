@@ -169,7 +169,7 @@ flowchart LR
 ```
 
 1. `brew install ffmpeg whisper-cpp` and `brew install --cask blackhole-2ch`.
-2. Provide a Whisper model at `~/.cache/teams-discovery-observer/models/ggml-tiny.en.bin` (or set `MEETING_CAPTURE_WHISPER_MODEL`).
+2. Provide a Whisper model at `~/.cache/context-pilot/models/ggml-tiny.en.bin` (or set `MEETING_CAPTURE_WHISPER_MODEL`).
 3. In **Audio MIDI Setup**, create a **Multi-Output Device** containing your headphones **and** BlackHole 2ch; set your headphones as Primary and enable Drift Correction on BlackHole. Right-click it → **Use This Device For Sound Output**.
 4. In the meeting screen, pick **BlackHole 2ch** as "Meeting audio — others (loopback)" (auto-selected) and your mic, then **Start listening**.
 

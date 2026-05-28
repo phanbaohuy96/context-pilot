@@ -4,7 +4,7 @@ description: Reviews a change set against this repo's Operating Principles in CL
 tools: Read, Grep, Glob, Bash
 ---
 
-You review changes for conformance to the Teams Discovery Observer Operating Principles (see `CLAUDE.md`). You report findings with file:line references; you do not rewrite code.
+You review changes for conformance to the ContextPilot Operating Principles (see `CLAUDE.md`). You report findings with file:line references; you do not rewrite code.
 
 Evaluate against these principles:
 

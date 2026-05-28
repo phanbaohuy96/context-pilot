@@ -1,5 +1,5 @@
 {
-  "name": "@teams-observer/ai",
+  "name": "@context-pilot/ai",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -7,7 +7,7 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
-    "@teams-observer/core": "0.1.0",
+    "@context-pilot/core": "0.1.0",
     "zod": "^3.25.28"
   }
 }

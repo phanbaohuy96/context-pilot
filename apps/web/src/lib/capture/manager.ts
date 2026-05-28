@@ -12,8 +12,8 @@ import {
   speakerLabel,
   type SpeakerCluster,
   type TranscriptionSegment,
-} from "@teams-observer/core";
-import { prisma } from "@teams-observer/db";
+} from "@context-pilot/core";
+import { prisma } from "@context-pilot/db";
 import { createDeterministicMeetingInsights } from "../meeting-insights";
 import { maybeGenerateMeetingNotes } from "../meeting-notes";
 import { embedSpeaker, speakerSimilarityThreshold, warmupDiarizer } from "./diarizer";
@@ -63,7 +63,7 @@ function whisperCommand(): string {
 
 function whisperModelPath(): string {
   return process.env.MEETING_CAPTURE_WHISPER_MODEL
-    ?? join(homedir(), ".cache", "teams-discovery-observer", "models", "ggml-tiny.en.bin");
+    ?? join(homedir(), ".cache", "context-pilot", "models", "ggml-tiny.en.bin");
 }
 
 function ffmpegFormat(): string {
@@ -164,7 +164,7 @@ function runWhisper(audioPath: string, jsonBase?: string): Promise<string> {
 
 // Reads a whisper -ojf JSON file and returns the utterance confidence (mean token
 // probability). Returns undefined on any read/parse problem (fail-soft); the scoring
-// itself is the pure, tested meanTokenConfidence in @teams-observer/core.
+// itself is the pure, tested meanTokenConfidence in @context-pilot/core.
 async function readTranscriptionConfidence(jsonPath: string): Promise<number | undefined> {
   try {
     const parsed = JSON.parse(await readFile(jsonPath, "utf8")) as { transcription?: TranscriptionSegment[] };

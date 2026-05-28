@@ -1,6 +1,6 @@
 import { Queue, Worker, type Processor } from "bullmq";
 import IORedis from "ioredis";
-import { queueNames, type GraphNotificationJobData, type SummarizeThreadJobData } from "@teams-observer/core";
+import { queueNames, type GraphNotificationJobData, type SummarizeThreadJobData } from "@context-pilot/core";
 
 export function createRedisConnection(): IORedis {
   return new IORedis(process.env.REDIS_URL ?? "redis://localhost:6379", {

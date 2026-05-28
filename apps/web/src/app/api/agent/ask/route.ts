@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { createAiProvider } from "@teams-observer/ai";
-import { prisma } from "@teams-observer/db";
+import { createAiProvider } from "@context-pilot/ai";
+import { prisma } from "@context-pilot/db";
 
 const askSchema = z.object({
   question: z.string().min(1).max(2000),

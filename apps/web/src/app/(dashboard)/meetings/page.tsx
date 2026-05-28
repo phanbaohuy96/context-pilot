@@ -1,7 +1,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { createMeetingSessionSchema } from "@teams-observer/core";
-import { prisma } from "@teams-observer/db";
+import { createMeetingSessionSchema } from "@context-pilot/core";
+import { prisma } from "@context-pilot/db";
 import { getOrCreateDefaultTenant } from "../../../lib/tenant";
 
 export const dynamic = "force-dynamic";

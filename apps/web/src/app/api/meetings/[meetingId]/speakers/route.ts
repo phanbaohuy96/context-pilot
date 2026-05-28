@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import type { Prisma } from "@prisma/client";
-import { metadataWithSpeakerAlias, speakerKeyFromMetadata } from "@teams-observer/core";
-import { prisma } from "@teams-observer/db";
+import { metadataWithSpeakerAlias, speakerKeyFromMetadata } from "@context-pilot/core";
+import { prisma } from "@context-pilot/db";
 
 export const dynamic = "force-dynamic";
 

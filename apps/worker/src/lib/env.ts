@@ -1,4 +1,4 @@
-import { MicrosoftGraphClient } from "@teams-observer/graph";
+import { MicrosoftGraphClient } from "@context-pilot/graph";
 
 export function requiredEnv(name: string): string {
   const value = process.env[name];

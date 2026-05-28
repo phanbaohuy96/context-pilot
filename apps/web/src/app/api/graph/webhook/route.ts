@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { graphNotificationEnvelopeSchema, validateClientState } from "@teams-observer/core";
+import { graphNotificationEnvelopeSchema, validateClientState } from "@context-pilot/core";
 import { getGraphNotificationsQueue } from "../../../../lib/queues";
 
 export async function GET(request: NextRequest): Promise<Response> {
