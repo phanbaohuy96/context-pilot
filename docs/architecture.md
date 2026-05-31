@@ -30,6 +30,7 @@ flowchart TB
   subgraph ai["packages/ai providers"]
     openai["LocalOpenAiProvider"]
     claude["ClaudeCodeCliProvider"]
+    codex["CodexCliProvider"]
   end
 
   ffmpeg["ffmpeg + whisper-cli"]
@@ -57,7 +58,7 @@ flowchart TB
 ### Apps
 
 - **`apps/web`** — Next.js App Router. Two responsibilities:
-  - **Dashboard pages** under `src/app/(dashboard)/`: `/` (overview), `/sources`, `/chats/[sourceId]`, `/threads`, `/requirements`, `/agent`, `/export`, `/meetings`, `/meetings/[meetingId]`.
+  - **Dashboard pages** under `src/app/(dashboard)/`: `/` (overview), `/sources`, `/chats/[sourceId]`, `/threads`, `/requirements`, `/agent`, `/settings`, `/export`, `/meetings`, `/meetings/[meetingId]`.
   - **API routes** under `src/app/api/`: Graph (`/graph/auth/*`, `/graph/chats`, `/graph/subscriptions`, `/graph/webhook`), `/sources`, `/requirements`, `/agent/ask`, `/export`, and the meeting endpoints (`/meetings`, `/meetings/[id]`, `/meetings/[id]/utterances`, `/meetings/[id]/capture`, `/meetings/devices`).
   - Server-side helpers in `src/lib/`: `queues.ts` (BullMQ producers), `graph.ts` (Graph setup), `tenant.ts` (default tenant), `meeting-insights.ts` (deterministic assist detection), `meeting-notes.ts` (opt-in rolling LLM notes), and `capture/` (server-managed audio capture — `manager.ts` plus `diarizer.ts` for opt-in speaker embeddings).
 - **`apps/worker`** — long-running Node process. Registers BullMQ workers (`graph-notifications`, `summarize-thread`) and runs a 5-minute subscription-renewal loop. Entry: `src/index.ts`.
@@ -72,8 +73,8 @@ flowchart TB
   - `sanitize.ts` — HTML sanitization for untrusted Teams content.
   - `security.ts` — security helpers (e.g. client-state hashing/compare).
 - **`packages/graph`** — Microsoft Graph integration: `client.ts`, `resources.ts`, `subscriptions.ts`, `normalize.ts` (Graph chat message → normalized `Message`).
-- **`packages/ai`** — `provider.ts` (the `AiProvider` contract: `summarizeThread`, `extractRequirements`, `answerQuestion`, `summarizeMeeting`), `factory.ts` (provider selection), `providers/local-openai.ts`, `providers/claude-code-cli.ts`, `prompts/` (summarize, requirements, answer, context, meeting-notes), `json.ts` (robust JSON parsing of model output).
-- **`packages/db`** — Prisma client singleton (`prisma`) and re-exports.
+- **`packages/ai`** — `provider.ts` (the `AiProvider` contract: `summarizeThread`, `extractRequirements`, `answerQuestion`, `summarizeMeeting`), `factory.ts` (provider selection), `providers/local-openai.ts`, `providers/claude-code-cli.ts`, `providers/codex-cli.ts`, `prompts/` (summarize, requirements, answer, context, meeting-notes), `json.ts` (robust JSON parsing of model output).
+- **`packages/db`** — Prisma client singleton (`prisma`), AI provider settings resolution/encryption helpers, and re-exports.
 
 ## Data model
 
@@ -84,6 +85,7 @@ erDiagram
   Tenant ||--o{ MonitoredSource : owns
   Tenant ||--o{ MeetingSession : owns
   Tenant ||--o{ AuditLog : records
+  Tenant ||--o| AiProviderSettings : configures
   MonitoredSource ||--o{ GraphSubscription : has
   MonitoredSource ||--o{ Message : stores
   MonitoredSource ||--o{ ThreadSummary : summarizes
@@ -100,7 +102,7 @@ Two domains share the same database:
 
 - **Discovery domain:** `Tenant`, `User`, `ConsentGrant`, `MonitoredSource`, `GraphSubscription`, `Message`, `ThreadSummary`, `Requirement`, `AgentSession`.
 - **Meeting domain:** `MeetingSession`, `TranscriptUtterance`, `MeetingInsight`, `MeetingSummary`.
-- **Cross-cutting:** `AuditLog` (started/ended meetings, ingestion events).
+- **Cross-cutting:** `AuditLog` (started/ended meetings, ingestion events) and `AiProviderSettings` (tenant-wide provider defaults plus encrypted local API key metadata).
 
 `ThreadSummary`, `Requirement`, and `AgentSession` all retain `evidenceMessageIds` so AI outputs trace back to the Teams messages that justified them.
 

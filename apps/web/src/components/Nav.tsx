@@ -18,6 +18,7 @@ const links: NavLink[] = [
   { href: "/threads", label: "Threads", icon: icon(<><path d="M21 15a2 2 0 0 1-2 2H8l-4 4V5a2 2 0 0 1 2-2h13a2 2 0 0 1 2 2z" /></>) },
   { href: "/requirements", label: "Requirements", icon: icon(<><path d="M9 11l3 3L22 4" /><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" /></>) },
   { href: "/agent", label: "Ask agent", icon: icon(<><path d="M12 3l1.9 4.6L18.5 9l-4.6 1.4L12 15l-1.9-4.6L5.5 9l4.6-1.4z" /><path d="M5 19l.8 2M19 17l.6 1.5" /></>) },
+  { href: "/settings", label: "Settings", icon: icon(<><path d="M12 8a4 4 0 1 0 0 8a4 4 0 0 0 0-8z" /><path d="M4 12h2m12 0h2M12 4v2m0 12v2M6.3 6.3l1.4 1.4m8.6 8.6l1.4 1.4M17.7 6.3l-1.4 1.4m-8.6 8.6l-1.4 1.4" /></>) },
   { href: "/export", label: "Export", icon: icon(<><path d="M12 3v12m0 0l-4-4m4 4l4-4" /><path d="M5 21h14" /></>) },
 ];
 

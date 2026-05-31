@@ -29,7 +29,6 @@ export function AgentConsole({
   layout = "two-column",
 }: AgentConsoleProps) {
   const [question, setQuestion] = useState(defaultQuestion);
-  const [provider, setProvider] = useState("LOCAL_OPENAI");
   const [response, setResponse] = useState<AgentResponse | null>(null);
   const [error, setError] = useState<string>("");
   const [loading, setLoading] = useState(false);
@@ -43,7 +42,7 @@ export function AgentConsole({
     const result = await fetch("/api/agent/ask", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ question, provider, sourceId }),
+      body: JSON.stringify({ question, sourceId }),
     });
 
     const body = await result.json().catch(() => ({}));
@@ -74,13 +73,6 @@ export function AgentConsole({
             </button>
           ))}
         </div>
-        <label>
-          Provider
-          <select value={provider} onChange={(event) => setProvider(event.target.value)}>
-            <option value="LOCAL_OPENAI">Local OpenAI-compatible</option>
-            <option value="CLAUDE_CODE_CLI">Claude Code CLI</option>
-          </select>
-        </label>
         <label>
           Question
           <textarea value={question} onChange={(event) => setQuestion(event.target.value)} />

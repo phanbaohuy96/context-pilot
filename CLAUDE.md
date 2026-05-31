@@ -80,12 +80,15 @@ The policy boundary is explicit source approval: ingestion must go through `asse
 
 ### AI flow
 
-`packages/ai/src/provider.ts` defines the provider contract: `summarizeThread`, `extractRequirements`, `answerQuestion`, and `summarizeMeeting` (rolling meeting notes). `createAiProvider` in `packages/ai/src/factory.ts` selects either:
+`packages/ai/src/provider.ts` defines the provider contract: `summarizeThread`, `extractRequirements`, `answerQuestion`, and `summarizeMeeting` (rolling meeting notes). `createAiProvider` in `packages/ai/src/factory.ts` selects:
 
 - `LOCAL_OPENAI` — calls a local OpenAI-compatible `/chat/completions` endpoint such as Ollama or LM Studio.
 - `CLAUDE_CODE_CLI` — spawns the local Claude Code CLI with `claude -p` and a bounded prompt.
+- `CODEX_CLI` — spawns `codex exec` non-interactively with a read-only sandbox.
 
-Prompt templates in `packages/ai/src/prompts/` treat Teams messages as untrusted evidence and require message-ID citations. The ask-agent API at `apps/web/src/app/api/agent/ask/route.ts` retrieves recent messages, summaries, and non-rejected requirements, calls the selected provider, and stores an `AgentSession`.
+Feature defaults and provider runtime settings are configured per tenant on `/settings` and stored in Postgres. When no DB settings row exists, the app uses hard-coded local defaults instead of provider env vars. DB-stored local API keys are encrypted with `SETTINGS_ENCRYPTION_KEY` and are never returned decrypted to the UI.
+
+Prompt templates in `packages/ai/src/prompts/` treat Teams messages as untrusted evidence and require message-ID citations. The ask-agent API at `apps/web/src/app/api/agent/ask/route.ts` retrieves recent messages, summaries, and non-rejected requirements, calls the configured provider, and stores an `AgentSession`.
 
 ### Meeting assistant flow
 

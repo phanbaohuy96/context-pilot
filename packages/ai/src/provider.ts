@@ -1,11 +1,12 @@
 import type {
   AgentAnswer,
   AgentContextBundle,
+  AiProviderKind,
   ExtractedRequirement,
   MeetingNotesContext,
 } from "@context-pilot/core";
 
-export type AiProviderKind = "LOCAL_OPENAI" | "CLAUDE_CODE_CLI";
+export type { AiProviderKind };
 
 export type ThreadSummaryResult = {
   summary: string;

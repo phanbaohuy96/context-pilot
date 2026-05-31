@@ -20,7 +20,3 @@ export function getGraphClient(): MicrosoftGraphClient {
     clientSecret: requiredEnv("AZURE_CLIENT_SECRET"),
   });
 }
-
-export function getClaudeCodeTimeoutMs(): number {
-  return Number(process.env.CLAUDE_CODE_TIMEOUT_MS ?? 120_000);
-}

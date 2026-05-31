@@ -1,7 +1,7 @@
 import type { Job } from "bullmq";
 import { createAiProvider, promptVersion } from "@context-pilot/ai";
 import type { SummarizeThreadJobData } from "@context-pilot/core";
-import { prisma } from "@context-pilot/db";
+import { prisma, resolveTenantAiProviderConfig } from "@context-pilot/db";
 
 export async function summarizeThreadJob(job: Job<SummarizeThreadJobData>): Promise<void> {
   const source = await prisma.monitoredSource.findUnique({ where: { id: job.data.sourceId } });
@@ -32,7 +32,12 @@ export async function summarizeThreadJob(job: Job<SummarizeThreadJobData>): Prom
     })),
   };
 
-  const provider = createAiProvider(job.data.provider);
+  const resolvedProvider = await resolveTenantAiProviderConfig(
+    prisma,
+    source.tenantId,
+    "SUMMARIZATION",
+  );
+  const provider = createAiProvider(resolvedProvider.providerKind, resolvedProvider.providerConfig);
   const summary = await provider.summarizeThread(context);
 
   const savedSummary = await prisma.threadSummary.create({

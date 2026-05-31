@@ -119,7 +119,7 @@ These are code-driven (no model call) so they're fast and private.
 
 - After a finalized utterance, the capture path calls `maybeGenerateMeetingNotes` (`apps/web/src/lib/meeting-notes.ts`), fire-and-forget. It is throttled per meeting (regenerates every `MEETING_NOTES_MIN_NEW_UTTERANCES` new finalized utterances, default 6) and serialized so the two capture channels can't run it concurrently.
 - It builds a transcript from the recent finalized utterances (with speaker labels) and calls `provider.summarizeMeeting` (`packages/ai`) to get `{ summary, openQuestions, actionItems }`, parsed by `parseMeetingNotes` (tolerant of code fences / surrounding prose). The result upserts the meeting's single rolling `MeetingSummary`.
-- Enable with `MEETING_NOTES="true"` (off by default). Provider is the configured local LLM: `MEETING_NOTES_PROVIDER` = `LOCAL_OPENAI` (default; uses `LOCAL_AI_*`) or `CLAUDE_CODE_CLI` (uses `CLAUDE_CODE_*`). Failures are logged and swallowed — they never disrupt capture or the transcript.
+- Enable with `MEETING_NOTES="true"` (off by default). Provider comes from `/settings`; without a saved settings row, meeting notes use the hard-coded `LOCAL_OPENAI` default. Failures are logged and swallowed — they never disrupt capture or the transcript.
 - The UI shows the prose `summary` (as **Briefing**), action items, and open questions together in the **Meeting notes** panel of the intelligence rail.
 
 ## API surface
