@@ -361,6 +361,20 @@ label {
   color: var(--fg-soft);
 }
 
+.inline-check {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.inline-check input {
+  width: 16px;
+  height: 16px;
+  padding: 0;
+}
+
 input,
 select,
 textarea {

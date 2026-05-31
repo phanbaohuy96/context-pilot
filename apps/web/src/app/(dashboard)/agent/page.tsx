@@ -5,7 +5,7 @@ export default function AgentPage() {
     <>
       <header className="page-header">
         <h2>Ask the discovery agent</h2>
-        <p>Explore the collected Teams evidence using local AI or the local Claude Code CLI provider.</p>
+        <p>Explore the collected Teams evidence using the configured ask-agent provider.</p>
       </header>
       <AgentConsole />
     </>

@@ -1,21 +1,17 @@
-import { createAiProvider, promptVersion, type AiProviderKind } from "@context-pilot/ai";
+import { createAiProvider, promptVersion } from "@context-pilot/ai";
 import {
   speakerAliasFromMetadata,
   speakerKeyFromMetadata,
   speakerLabelFromMetadata,
   type MeetingTranscriptLine,
 } from "@context-pilot/core";
-import { prisma } from "@context-pilot/db";
+import { prisma, resolveTenantAiProviderConfig } from "@context-pilot/db";
 import type { TranscriptUtterance } from "@prisma/client";
 
 // Regenerate rolling notes after this many new finalized utterances since the last run.
 const MIN_NEW_UTTERANCES = Number(process.env.MEETING_NOTES_MIN_NEW_UTTERANCES) || 6;
 // Cap the prompt: summarize from the most recent window rather than the whole meeting.
 const MAX_TRANSCRIPT_LINES = 120;
-
-function providerKind(): AiProviderKind {
-  return process.env.MEETING_NOTES_PROVIDER === "CLAUDE_CODE_CLI" ? "CLAUDE_CODE_CLI" : "LOCAL_OPENAI";
-}
 
 function notesEnabled(): boolean {
   // Opt-in: notes send transcript text to an LLM provider, so they stay off unless
@@ -93,7 +89,12 @@ export async function maybeGenerateMeetingNotes(meetingId: string): Promise<void
       return;
     }
 
-    const provider = createAiProvider(providerKind());
+    const resolvedProvider = await resolveTenantAiProviderConfig(
+      prisma,
+      meeting.tenantId,
+      "MEETING_NOTES",
+    );
+    const provider = createAiProvider(resolvedProvider.providerKind, resolvedProvider.providerConfig);
     const notes = await provider.summarizeMeeting({ title: meeting.title, transcript });
     if (!notes.summary && !notes.openQuestions.length && !notes.actionItems.length) {
       return;

@@ -1,23 +1,28 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createAiProvider } from "@context-pilot/ai";
-import { prisma } from "@context-pilot/db";
+import { prisma, resolveTenantAiProviderConfig } from "@context-pilot/db";
+import { getOrCreateDefaultTenant } from "../../../../lib/tenant";
 
 const askSchema = z.object({
   question: z.string().min(1).max(2000),
-  provider: z.enum(["LOCAL_OPENAI", "CLAUDE_CODE_CLI"]).default("LOCAL_OPENAI"),
   sourceId: z.string().min(1).optional(),
 });
 
 export async function POST(request: Request): Promise<Response> {
   const body = askSchema.parse(await request.json());
   const sourceFilter = body.sourceId ? { sourceId: body.sourceId } : {};
+  let tenantId: string;
 
   if (body.sourceId) {
     const source = await prisma.monitoredSource.findUnique({ where: { id: body.sourceId } });
     if (!source) {
       return NextResponse.json({ error: "Selected chat source was not found." }, { status: 404 });
     }
+    tenantId = source.tenantId;
+  } else {
+    const tenant = await getOrCreateDefaultTenant();
+    tenantId = tenant.id;
   }
 
   const [messages, summaries, requirements] = await Promise.all([
@@ -39,7 +44,8 @@ export async function POST(request: Request): Promise<Response> {
     }),
   ]);
 
-  const provider = createAiProvider(body.provider);
+  const resolvedProvider = await resolveTenantAiProviderConfig(prisma, tenantId, "ASK_AGENT");
+  const provider = createAiProvider(resolvedProvider.providerKind, resolvedProvider.providerConfig);
 
   try {
     const answer = await provider.answerQuestion({

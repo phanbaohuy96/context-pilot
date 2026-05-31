@@ -48,6 +48,7 @@ enum ReviewStatus {
 enum AiProviderKind {
   LOCAL_OPENAI
   CLAUDE_CODE_CLI
+  CODEX_CLI
 }
 
 enum MeetingPlatform {
@@ -96,6 +97,28 @@ model Tenant {
   monitoredSources  MonitoredSource[]
   meetingSessions   MeetingSession[]
   auditLogs         AuditLog[]
+  aiProviderSettings AiProviderSettings?
+}
+
+model AiProviderSettings {
+  id                      String         @id @default(cuid())
+  tenantId                String         @unique
+  tenant                  Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  summarizationProvider   AiProviderKind @default(LOCAL_OPENAI)
+  askAgentProvider        AiProviderKind @default(LOCAL_OPENAI)
+  meetingNotesProvider    AiProviderKind @default(LOCAL_OPENAI)
+  localBaseUrl            String?
+  localModel              String?
+  localApiKeyEncrypted    String?
+  claudeCommand           String?
+  claudeWorkdir           String?
+  claudeTimeoutMs         Int?
+  codexCommand            String?
+  codexWorkdir            String?
+  codexModel              String?
+  codexTimeoutMs          Int?
+  createdAt               DateTime       @default(now())
+  updatedAt               DateTime       @updatedAt
 }
 
 model User {

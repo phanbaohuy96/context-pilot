@@ -1,3 +1,5 @@
+import type { AiProviderKind } from "./ai-settings";
+
 export const queueNames = {
   graphNotifications: "graph-notifications",
   summarizeThread: "summarize-thread",
@@ -16,5 +18,5 @@ export type GraphNotificationJobData = {
 export type SummarizeThreadJobData = {
   sourceId: string;
   threadId: string;
-  provider: "LOCAL_OPENAI" | "CLAUDE_CODE_CLI";
+  provider?: AiProviderKind;
 };

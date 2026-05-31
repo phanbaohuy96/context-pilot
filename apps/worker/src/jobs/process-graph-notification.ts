@@ -91,6 +91,5 @@ export async function processGraphNotificationJob(job: Job<GraphNotificationJobD
   await summarizeQueue.add(queueNames.summarizeThread, {
     sourceId: subscription.sourceId,
     threadId: message.threadId,
-    provider: "LOCAL_OPENAI",
   });
 }
