@@ -6,19 +6,19 @@ import {
   supersededByFromMetadata,
   type MeetingTranscriptLine,
 } from "@context-pilot/core";
-import { prisma, resolveTenantAiProviderConfig } from "@context-pilot/db";
-import type { TranscriptUtterance } from "@prisma/client";
+import { prisma, resolveAiProviderConfigFromSettings } from "@context-pilot/db";
+import type { Prisma, TranscriptUtterance } from "@prisma/client";
+
+// The meeting row with its tenant's provider settings joined — loaded once per finalize by the
+// capture runner and passed in, so notes and correction don't each re-query the same row.
+export type MeetingWithProviderSettings = Prisma.MeetingSessionGetPayload<{
+  include: { tenant: { include: { aiProviderSettings: true } } };
+}>;
 
 // Regenerate rolling notes after this many new finalized utterances since the last run.
 const MIN_NEW_UTTERANCES = Number(process.env.MEETING_NOTES_MIN_NEW_UTTERANCES) || 6;
 // Cap the prompt: summarize from the most recent window rather than the whole meeting.
 const MAX_TRANSCRIPT_LINES = 120;
-
-function notesEnabled(): boolean {
-  // Opt-in: notes send transcript text to an LLM provider, so they stay off unless
-  // explicitly enabled.
-  return process.env.MEETING_NOTES === "true";
-}
 
 type NotesState = { inFlight: boolean; lastCount: number };
 const states = new Map<string, NotesState>();
@@ -56,11 +56,17 @@ function isInterim(utterance: TranscriptUtterance): boolean {
 // Fire-and-forget from the capture path: when enough new utterances have accumulated,
 // summarize the recent transcript with the configured provider and upsert the
 // meeting's rolling MeetingSummary. Throttled and serialized per meeting; any failure
-// is logged and swallowed so it never disrupts capture.
-export async function maybeGenerateMeetingNotes(meetingId: string): Promise<void> {
-  if (!notesEnabled()) {
+// is logged and swallowed so it never disrupts capture. The caller passes the meeting (with its
+// tenant's provider settings) it already loaded for this finalize, so we don't re-query it.
+export async function maybeGenerateMeetingNotes(meeting: MeetingWithProviderSettings): Promise<void> {
+  // Opt-in per tenant on /settings: notes send transcript text to an LLM provider. Check this
+  // first (cheap, in-memory) so a disabled tenant pays nothing — no utterance scan, no throttle
+  // advance (advancing while disabled would delay the first notes once it is later enabled).
+  const settings = meeting.tenant.aiProviderSettings;
+  if (!settings?.meetingNotesEnabled) {
     return;
   }
+  const meetingId = meeting.id;
   const state = states.get(meetingId) ?? { inFlight: false, lastCount: 0 };
   states.set(meetingId, state);
   if (state.inFlight) {
@@ -97,16 +103,8 @@ export async function maybeGenerateMeetingNotes(meetingId: string): Promise<void
     const transcript: MeetingTranscriptLine[] = finals
       .slice(-MAX_TRANSCRIPT_LINES)
       .map((utterance) => ({ speaker: speakerName(utterance, aliases), text: utterance.text }));
-    const meeting = await prisma.meetingSession.findUnique({ where: { id: meetingId } });
-    if (!meeting) {
-      return;
-    }
 
-    const resolvedProvider = await resolveTenantAiProviderConfig(
-      prisma,
-      meeting.tenantId,
-      "MEETING_NOTES",
-    );
+    const resolvedProvider = resolveAiProviderConfigFromSettings(settings, "MEETING_NOTES");
     const provider = createAiProvider(resolvedProvider.providerKind, resolvedProvider.providerConfig);
     const notes = await provider.summarizeMeeting({ title: meeting.title, transcript });
     if (!notes.summary && !notes.openQuestions.length && !notes.actionItems.length) {

@@ -8,6 +8,8 @@ export type AiProviderSettingsRecord = {
   summarizationProvider: AiProviderKind;
   askAgentProvider: AiProviderKind;
   meetingNotesProvider: AiProviderKind;
+  meetingNotesEnabled: boolean;
+  diarizationEnabled: boolean;
   meetingCorrectionEnabled: boolean;
   localBaseUrl: string | null;
   localModel: string | null;
@@ -41,6 +43,7 @@ export type AiProviderSettingsView = {
   codexModel: string;
   codexTimeoutMs: number;
   meetingNotesEnabled: boolean;
+  diarizationEnabled: boolean;
   meetingCorrectionEnabled: boolean;
 };
 
@@ -121,7 +124,8 @@ export function getAiProviderSettingsView(
     codexWorkdir: settings?.codexWorkdir ?? "",
     codexModel: settings?.codexModel ?? "",
     codexTimeoutMs: settings?.codexTimeoutMs ?? defaultProviderTimeoutMs,
-    meetingNotesEnabled: env.MEETING_NOTES === "true",
+    meetingNotesEnabled: settings?.meetingNotesEnabled ?? false,
+    diarizationEnabled: settings?.diarizationEnabled ?? false,
     meetingCorrectionEnabled: settings?.meetingCorrectionEnabled ?? false,
   };
 }

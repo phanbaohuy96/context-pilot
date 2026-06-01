@@ -19,7 +19,10 @@ export async function GET(_request: Request, { params }: CaptureRouteContext): P
 
 export async function POST(request: Request, { params }: CaptureRouteContext): Promise<Response> {
   const { meetingId } = await params;
-  const meeting = await prisma.meetingSession.findUnique({ where: { id: meetingId } });
+  const meeting = await prisma.meetingSession.findUnique({
+    where: { id: meetingId },
+    include: { tenant: { include: { aiProviderSettings: true } } },
+  });
 
   if (!meeting) {
     return NextResponse.json({ error: "Meeting session was not found." }, { status: 404 });
@@ -33,6 +36,7 @@ export async function POST(request: Request, { params }: CaptureRouteContext): P
     const capture = await startCapture(meetingId, {
       mic: optionalString(body.mic),
       meeting: optionalString(body.meeting),
+      diarize: meeting.tenant.aiProviderSettings?.diarizationEnabled ?? false,
     });
     return NextResponse.json({ capture }, { status: 201 });
   } catch (error) {

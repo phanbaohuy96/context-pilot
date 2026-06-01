@@ -107,6 +107,8 @@ model AiProviderSettings {
   summarizationProvider   AiProviderKind @default(LOCAL_OPENAI)
   askAgentProvider        AiProviderKind @default(LOCAL_OPENAI)
   meetingNotesProvider    AiProviderKind @default(LOCAL_OPENAI)
+  meetingNotesEnabled      Boolean       @default(false)
+  diarizationEnabled       Boolean       @default(false)
   meetingCorrectionEnabled Boolean       @default(false)
   localBaseUrl            String?
   localModel              String?

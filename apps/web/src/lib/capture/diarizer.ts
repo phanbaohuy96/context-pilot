@@ -14,12 +14,6 @@ function modelId(): string {
   return process.env.MEETING_DIARIZATION_MODEL ?? "Xenova/wavlm-base-plus-sv";
 }
 
-function diarizationEnabled(): boolean {
-  // Opt-in: enabling it downloads a speaker model on first use, so it stays off
-  // unless explicitly turned on.
-  return process.env.MEETING_CAPTURE_DIARIZATION === "true";
-}
-
 export function speakerSimilarityThreshold(fallback: number): number {
   const parsed = Number(process.env.MEETING_DIARIZATION_SIMILARITY_THRESHOLD);
   return Number.isFinite(parsed) ? parsed : fallback;
@@ -71,22 +65,18 @@ async function load(): Promise<{ processor: XVectorProcessor; model: XVectorMode
   return loader;
 }
 
-// Kicks off the model load in the background (no-op when disabled). Called at capture
-// start so the cold download/init happens while the first utterances accumulate,
-// rather than stalling the first finalize. Errors are deferred to the real call.
+// Kicks off the model load in the background. Called at capture start (only for the
+// channel that diarizes) so the cold download/init happens while the first utterances
+// accumulate, rather than stalling the first finalize. Errors are deferred to the real call.
 export function warmupDiarizer(): void {
-  if (diarizationEnabled()) {
-    void load().catch(() => undefined);
-  }
+  void load().catch(() => undefined);
 }
 
-// Returns a 512-d speaker embedding for the utterance audio, or null when diarization
-// is disabled. Throws if the model is enabled but fails to load/run, so the caller can
-// record the error and continue without a speaker label.
-export async function embedSpeaker(wavPath: string, options: { force?: boolean } = {}): Promise<number[] | null> {
-  if (!options.force && !diarizationEnabled()) {
-    return null;
-  }
+// Returns a 512-d speaker embedding for the utterance audio. Callers decide whether to
+// diarize (the capture runner only calls this on its diarizing channel; imported diarization
+// always does), so this no longer self-gates. Throws if the model fails to load/run, so the
+// caller can record the error and continue without a speaker label.
+export async function embedSpeaker(wavPath: string): Promise<number[] | null> {
   const loaded = await load();
   if (!loaded) {
     return null;
@@ -96,5 +86,3 @@ export async function embedSpeaker(wavPath: string, options: { force?: boolean }
   const { embeddings } = await loaded.model(inputs);
   return embeddings.tolist()[0];
 }
-
-export { diarizationEnabled };

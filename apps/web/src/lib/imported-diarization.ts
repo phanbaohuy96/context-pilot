@@ -131,7 +131,7 @@ export async function diarizeImportedMeeting(meetingId: string, mediaFile: strin
       const wavPath = join(dir, `${utterance.id}-${randomUUID()}.wav`);
       try {
         await extractAudioSlice(mediaPath, wavPath, span.start, span.duration);
-        const embedding = await embedSpeaker(wavPath, { force: true });
+        const embedding = await embedSpeaker(wavPath);
         if (!embedding) {
           skipped += 1;
           continue;
