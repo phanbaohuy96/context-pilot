@@ -122,6 +122,20 @@ These are code-driven (no model call) so they're fast and private.
 - Enable with `MEETING_NOTES="true"` (off by default). Provider comes from `/settings`; without a saved settings row, meeting notes use the hard-coded `LOCAL_OPENAI` default. Failures are logged and swallowed — they never disrupt capture or the transcript.
 - The UI shows the prose `summary` (as **Briefing**), action items, and open questions together in the **Meeting notes** panel of the intelligence rail.
 
+## Transcript correction (LLM, opt-in)
+
+The silence gate finalizes an utterance on any speech→silence pause, so one spoken sentence often lands across several `TranscriptUtterance` rows. **Opt-in** correction (off by default; enable per tenant on `/settings` — "Merge fragmented transcript lines", stored on `AiProviderSettings.meetingCorrectionEnabled`) stitches these fragments back together:
+
+- After a finalized utterance the capture path calls `maybeCorrectTranscript` (`apps/web/src/lib/meeting-correction.ts`), fire-and-forget, mirroring meeting notes: serialized per meeting so the two capture channels can't run it concurrently. The live pass only merges a speaker's turn once it is **closed** — a different speaker takes over, or the same speaker pauses past `MERGE_MAX_GAP_MS` — leaving the still-open trailing turn for a later pass (`closedMergeCandidates`). To keep a continuous solo monologue from only stitching at the end, an open run longer than `MERGE_MAX_OPEN_RUN` fragments also closes all but its most recent fragment. It calls the provider only when a closed multi-fragment turn exists, so there is no count-based throttle. A final pass runs when the meeting ends and stitches the trailing turn too.
+- Candidate grouping is **deterministic code** (`groupMergeableUtterances` in `packages/core`): consecutive rows with the same speaker role + diarized key + channel, a gap ≤ `MERGE_MAX_GAP_MS` (2.5s), where the previous fragment does not end on sentence-final punctuation. The same boundary rule decides when a turn is closed, so the merge trigger and the grouping never disagree. The **model is used only to merge the text** of a candidate group (`provider.correctTranscript`) — merge/repunctuate only, no rewording or translation.
+- A merge creates one new merged `TranscriptUtterance` (spanning the group, carrying the speaker labelling) and marks each source fragment `engineMetadata.supersededBy = <mergedId>`. **Originals are retained** (assist insights already fired on them still resolve); the UI hides superseded rows and shows the merged one in their place. Provider comes from the **meeting-notes** selection on `/settings`. Failures are logged and swallowed.
+
+## Transcript translation (LLM, on-demand)
+
+Each finalized transcript bubble has a **translate button** (文A icon). Clicking it translates that line to Vietnamese via `provider.translateText` (meeting-notes provider selection) through `POST /api/meetings/[id]/utterances/[utteranceId]/translate`. The result is cached on the utterance's `engineMetadata.translation` keyed by a hash of the source text; re-toggling the language reads from storage (no second call), and a later text change (e.g. a merge replacing the fragment) changes the hash so the stale translation is ignored and re-fetched.
+
+**Assist cards** carry the same translate button. Each card maps to one or two underlying `MeetingInsight` rows (a question and its suggested reply), and the button translates every piece, flipping the whole card to Vietnamese only once all pieces resolve. Translation runs on the card's *display* text — the detector's label prefix is stripped first via the shared `assistInsightDisplayText` (`@context-pilot/core/assist-display`) so the client and the server hash the same string — through `POST /api/meetings/[id]/insights/[insightId]/translate`, and is cached per insight on `MeetingInsight.engineMetadata.translation` exactly like transcript lines.
+
 ## API surface
 
 | Method & path | Purpose |
@@ -131,6 +145,8 @@ These are code-driven (no model call) so they're fast and private.
 | `GET /api/meetings/[id]` | Session + utterances + insights + summaries (polled by the UI). |
 | `PATCH /api/meetings/[id]` | End a session (`status: ENDED`), writes an audit log. |
 | `POST /api/meetings/[id]/utterances` | Ingest a transcript utterance (`ingestTranscriptUtteranceSchema`); used by the CLI. |
+| `POST /api/meetings/[id]/utterances/[utteranceId]/translate` | Translate one utterance to Vietnamese (cached on `engineMetadata`, opt-in provider). |
+| `POST /api/meetings/[id]/insights/[insightId]/translate` | Translate one assist-card insight to Vietnamese (cached on `engineMetadata`). |
 | `GET/POST/DELETE /api/meetings/[id]/capture` | Capture status / start / stop (server-managed). |
 | `PATCH /api/meetings/[id]/speakers` | Rename a diarized speaker key for the meeting transcript. |
 | `POST /api/meetings/[id]/speakers/diarize` | Post-process a linked imported local recording into diarized speaker keys. |

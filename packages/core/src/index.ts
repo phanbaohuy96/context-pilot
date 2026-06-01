@@ -1,5 +1,6 @@
 export * from "./ai-settings";
 export * from "./domain/agent";
+export * from "./domain/assist-display";
 export * from "./domain/diarization";
 export * from "./domain/meetings";
 export * from "./domain/messages";

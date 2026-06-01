@@ -33,6 +33,7 @@ async function saveSettings(formData: FormData) {
       summarizationProvider: providerValue(formData.get("summarizationProvider")),
       askAgentProvider: providerValue(formData.get("askAgentProvider")),
       meetingNotesProvider: providerValue(formData.get("meetingNotesProvider")),
+      meetingCorrectionEnabled: formData.get("meetingCorrectionEnabled") === "on",
       localBaseUrl: nullableText(formData.get("localBaseUrl")),
       localModel: nullableText(formData.get("localModel")),
       claudeCommand: nullableText(formData.get("claudeCommand")),
@@ -49,6 +50,7 @@ async function saveSettings(formData: FormData) {
       summarizationProvider: providerValue(formData.get("summarizationProvider")),
       askAgentProvider: providerValue(formData.get("askAgentProvider")),
       meetingNotesProvider: providerValue(formData.get("meetingNotesProvider")),
+      meetingCorrectionEnabled: formData.get("meetingCorrectionEnabled") === "on",
       localBaseUrl: nullableText(formData.get("localBaseUrl")),
       localModel: nullableText(formData.get("localModel")),
       claudeCommand: nullableText(formData.get("claudeCommand")),
@@ -100,6 +102,14 @@ export default async function SettingsPage() {
           {!view.meetingNotesEnabled ? (
             <p className="muted">Rolling meeting notes are disabled until MEETING_NOTES=true.</p>
           ) : null}
+          <label className="inline-check">
+            <input
+              name="meetingCorrectionEnabled"
+              type="checkbox"
+              defaultChecked={view.meetingCorrectionEnabled}
+            />
+            Merge fragmented transcript lines into full sentences (uses the meeting-notes provider)
+          </label>
         </section>
 
         <section className="grid grid-3">

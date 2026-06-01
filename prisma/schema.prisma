@@ -107,6 +107,7 @@ model AiProviderSettings {
   summarizationProvider   AiProviderKind @default(LOCAL_OPENAI)
   askAgentProvider        AiProviderKind @default(LOCAL_OPENAI)
   meetingNotesProvider    AiProviderKind @default(LOCAL_OPENAI)
+  meetingCorrectionEnabled Boolean       @default(false)
   localBaseUrl            String?
   localModel              String?
   localApiKeyEncrypted    String?
@@ -318,6 +319,7 @@ model MeetingInsight {
   provider            AiProviderKind?
   model               String?
   confidence          Float?
+  engineMetadata      Json?
   createdAt           DateTime           @default(now())
   dismissedAt         DateTime?
 

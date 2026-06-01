@@ -1,10 +1,25 @@
-import type { AgentAnswer, AgentContextBundle, MeetingNotesContext } from "@context-pilot/core";
+import type {
+  AgentAnswer,
+  AgentContextBundle,
+  MeetingNotesContext,
+  TranscriptCorrectionContext,
+  TranslationContext,
+} from "@context-pilot/core";
 import { buildAnswerPrompt } from "../prompts/answer";
 import { buildMeetingNotesPrompt } from "../prompts/meeting-notes";
 import { buildRequirementsPrompt } from "../prompts/requirements";
 import { buildSummarizePrompt } from "../prompts/summarize";
-import { parseMeetingNotes, parseRequirementExtraction } from "../json";
-import type { AiProvider, MeetingNotesResult, RequirementExtractionResult, ThreadSummaryResult } from "../provider";
+import { buildTranscriptCorrectionPrompt } from "../prompts/transcript-correction";
+import { buildTranslatePrompt } from "../prompts/translate";
+import { parseMeetingNotes, parseRequirementExtraction, parseTranscriptCorrection, parseTranslation } from "../json";
+import type {
+  AiProvider,
+  MeetingNotesResult,
+  RequirementExtractionResult,
+  ThreadSummaryResult,
+  TranscriptCorrectionResult,
+  TranslationResult,
+} from "../provider";
 
 export type LocalOpenAiProviderConfig = {
   baseUrl: string;
@@ -57,6 +72,16 @@ export class LocalOpenAiProvider implements AiProvider {
     const text = await this.complete(buildMeetingNotesPrompt(input), { json: true });
     const parsed = parseMeetingNotes(text);
     return { ...parsed, model: this.model };
+  }
+
+  async correctTranscript(input: TranscriptCorrectionContext): Promise<TranscriptCorrectionResult> {
+    const text = await this.complete(buildTranscriptCorrectionPrompt(input), { json: true });
+    return { ...parseTranscriptCorrection(text), model: this.model };
+  }
+
+  async translateText(input: TranslationContext): Promise<TranslationResult> {
+    const text = await this.complete(buildTranslatePrompt(input), { json: true });
+    return { ...parseTranslation(text), model: this.model };
   }
 
   private async complete(prompt: string, options: { json?: boolean } = {}): Promise<string> {

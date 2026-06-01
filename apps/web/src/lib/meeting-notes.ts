@@ -3,6 +3,7 @@ import {
   speakerAliasFromMetadata,
   speakerKeyFromMetadata,
   speakerLabelFromMetadata,
+  supersededByFromMetadata,
   type MeetingTranscriptLine,
 } from "@context-pilot/core";
 import { prisma, resolveTenantAiProviderConfig } from "@context-pilot/db";
@@ -71,14 +72,26 @@ export async function maybeGenerateMeetingNotes(meetingId: string): Promise<void
       where: { meetingSessionId: meetingId },
       orderBy: { startedAt: "asc" },
     });
-    const finals = utterances.filter((utterance) => !isInterim(utterance) && utterance.text.trim());
-    if (finals.length - state.lastCount < MIN_NEW_UTTERANCES) {
+    const finalized = utterances.filter(
+      (utterance) => !isInterim(utterance) && utterance.text.trim(),
+    );
+    // Throttle on the count of finalized rows, which only grows (originals are retained even
+    // after a correction merge adds a new row). Gating on the superseded-excluded `finals`
+    // below would not: a merge shrinks that set, so it could dip under the threshold and
+    // stall notes mid-meeting.
+    if (finalized.length - state.lastCount < MIN_NEW_UTTERANCES) {
       return;
     }
     // Advance the counter before generating (not after success): on a provider
     // failure we'd rather wait for the next window than retry on every finalize and
     // hammer a down provider.
-    state.lastCount = finals.length;
+    state.lastCount = finalized.length;
+
+    // Exclude superseded fragments from the transcript we send so a corrected sentence isn't
+    // sent to the LLM both as its merged row and its original halves (merged row is kept).
+    const finals = finalized.filter(
+      (utterance) => !supersededByFromMetadata(utterance.engineMetadata),
+    );
 
     const aliases = buildSpeakerAliases(finals);
     const transcript: MeetingTranscriptLine[] = finals

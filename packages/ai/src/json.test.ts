@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseMeetingNotes } from "./json";
+import { parseMeetingNotes, parseTranscriptCorrection, parseTranslation } from "./json";
 
 describe("parseMeetingNotes", () => {
   it("parses a plain JSON object", () => {
@@ -26,5 +26,31 @@ describe("parseMeetingNotes", () => {
       openQuestions: [],
       actionItems: [],
     });
+  });
+});
+
+describe("parseTranscriptCorrection / parseTranslation", () => {
+  it("reads the text field from a JSON object", () => {
+    expect(parseTranscriptCorrection('{"text":"We should move the deadline to Friday."}').text).toBe(
+      "We should move the deadline to Friday.",
+    );
+    expect(parseTranslation('{"text":"Xin chào"}').text).toBe("Xin chào");
+  });
+
+  it("tolerates code fences around the JSON", () => {
+    expect(parseTranslation('```json\n{"text":"Xin chào"}\n```').text).toBe("Xin chào");
+  });
+
+  it("falls back to the raw output when the model replied in plain text", () => {
+    expect(parseTranscriptCorrection("We should move the deadline to Friday.").text).toBe(
+      "We should move the deadline to Friday.",
+    );
+  });
+
+  it("returns empty (not the literal JSON) when a well-formed object has an empty text field", () => {
+    // Regression: an empty `text` must NOT fall through to the raw output, or the literal
+    // `{"text":""}` would be written into the transcript / shown as the translation.
+    expect(parseTranscriptCorrection('{"text":""}').text).toBe("");
+    expect(parseTranslation('{"text":"   "}').text).toBe("");
   });
 });

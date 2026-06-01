@@ -2,10 +2,17 @@
 
 import type { CSSProperties, KeyboardEvent, PointerEvent, ReactNode } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
+// Subpath imports (not the core barrel, which pulls in node:crypto and can't be bundled
+// client-side) so the translation cache hash and the assist label-stripping stay a single
+// source of truth shared with the server.
+import { hashTranscriptText } from "@context-pilot/core/hash";
+import { assistInsightDisplayText } from "@context-pilot/core/assist-display";
 
 type MeetingStatus = "ACTIVE" | "ENDED" | "ERROR";
 type SpeakerRole = "SELF" | "OTHER" | "UNKNOWN";
 type SourceChannel = "MIC" | "LOOPBACK" | "MIXED" | "IMPORTED";
+
+type UtteranceTranslation = { lang: string; text: string; sourceHash: string };
 
 type Utterance = {
   id: string;
@@ -17,10 +24,19 @@ type Utterance = {
   speakerKey?: number;
   speakerLabel?: string;
   speakerAlias?: string;
+  supersededBy?: string;
+  translation?: UtteranceTranslation;
 };
 
-type RawUtterance = Omit<Utterance, "interim" | "speakerKey" | "speakerLabel" | "speakerAlias"> & {
-  engineMetadata?: { interim?: boolean; speakerKey?: number; speakerLabel?: string; speakerAlias?: string } | null;
+type RawUtterance = Omit<Utterance, "interim" | "speakerKey" | "speakerLabel" | "speakerAlias" | "supersededBy" | "translation"> & {
+  engineMetadata?: {
+    interim?: boolean;
+    speakerKey?: number;
+    speakerLabel?: string;
+    speakerAlias?: string;
+    supersededBy?: string;
+    translation?: UtteranceTranslation;
+  } | null;
 };
 
 type Insight = {
@@ -30,6 +46,8 @@ type Insight = {
   keywords: string[];
   relatedUtteranceIds: string[];
   createdAt: string;
+  // Freeform engine metadata; carries the cached Vietnamese translation once requested.
+  engineMetadata?: { translation?: UtteranceTranslation } | null;
 };
 
 // A question and its suggested answer are two insights emitted from the same
@@ -73,6 +91,8 @@ function toUtterance(raw: RawUtterance): Utterance {
     speakerKey: raw.engineMetadata?.speakerKey,
     speakerLabel: raw.engineMetadata?.speakerLabel,
     speakerAlias: raw.engineMetadata?.speakerAlias,
+    supersededBy: raw.engineMetadata?.supersededBy,
+    translation: raw.engineMetadata?.translation,
   };
 }
 
@@ -141,6 +161,20 @@ export function LiveMeetingWorkspace({
   const [speakerError, setSpeakerError] = useState("");
   const [diarizePending, setDiarizePending] = useState(false);
   const [diarizeError, setDiarizeError] = useState("");
+  // Per-utterance translate UI: whether the Vietnamese view is shown, the locally
+  // fetched translation (kept across polls so an open translation doesn't flicker), the
+  // set of ids currently being translated (a set, not a scalar, so two concurrent
+  // translations don't clear each other's pending state), and the last error.
+  const [showTranslation, setShowTranslation] = useState<Record<string, boolean>>({});
+  const [translations, setTranslations] = useState<Record<string, { text: string; sourceHash: string }>>({});
+  const [translatingIds, setTranslatingIds] = useState<ReadonlySet<string>>(() => new Set());
+  const [translateError, setTranslateError] = useState("");
+  // The same translate UI for assist cards: `showAssistTranslation` is keyed by card,
+  // `insightTranslations` caches each insight's fetched translation (a card can back onto
+  // two insights — a question and its suggested reply).
+  const [showAssistTranslation, setShowAssistTranslation] = useState<Record<string, boolean>>({});
+  const [insightTranslations, setInsightTranslations] = useState<Record<string, { text: string; sourceHash: string }>>({});
+  const [assistTranslateError, setAssistTranslateError] = useState("");
   const [wideColumns, setWideColumns] = useState({ transcript: 1.6, assist: 1, notes: 1.15 });
   const [topColumns, setTopColumns] = useState({ transcript: 1.6, assist: 1 });
 
@@ -427,6 +461,149 @@ export function LiveMeetingWorkspace({
     }
   }
 
+  // A translation is usable only if it was made from the utterance's current text;
+  // prefer a locally-fetched one, fall back to the stored one. A text change (e.g. a
+  // merge) changes the hash, so a stale translation is ignored and re-fetched.
+  function cachedTranslation(utterance: Utterance): { text: string; sourceHash: string } | undefined {
+    const hash = hashTranscriptText(utterance.text);
+    const local = translations[utterance.id];
+    if (local && local.sourceHash === hash) {
+      return local;
+    }
+    if (utterance.translation && utterance.translation.sourceHash === hash) {
+      return { text: utterance.translation.text, sourceHash: hash };
+    }
+    return undefined;
+  }
+
+  function markTranslating(id: string): void {
+    setTranslatingIds((current) => new Set(current).add(id));
+  }
+  function unmarkTranslating(id: string): void {
+    setTranslatingIds((current) => {
+      const next = new Set(current);
+      next.delete(id);
+      return next;
+    });
+  }
+
+  async function toggleTranslation(utterance: Utterance): Promise<void> {
+    setTranslateError("");
+    if (showTranslation[utterance.id]) {
+      setShowTranslation((current) => ({ ...current, [utterance.id]: false }));
+      return;
+    }
+    if (cachedTranslation(utterance)) {
+      setShowTranslation((current) => ({ ...current, [utterance.id]: true }));
+      return;
+    }
+    markTranslating(utterance.id);
+    try {
+      const result = await fetch(`/api/meetings/${meetingId}/utterances/${utterance.id}/translate`, {
+        method: "POST",
+      });
+      const body = await result.json().catch(() => ({}));
+      if (!result.ok) {
+        setTranslateError(body.error ?? "Could not translate.");
+        return;
+      }
+      const text: string = body.translation?.text ?? "";
+      if (!text) {
+        setTranslateError("Translation was empty.");
+        return;
+      }
+      setTranslations((current) => ({
+        ...current,
+        [utterance.id]: { text, sourceHash: hashTranscriptText(utterance.text) },
+      }));
+      setShowTranslation((current) => ({ ...current, [utterance.id]: true }));
+    } catch (error) {
+      setTranslateError(error instanceof Error ? error.message : "Could not translate.");
+    } finally {
+      unmarkTranslating(utterance.id);
+    }
+  }
+
+  // Lookup so an assist card can find its backing insight(s) (and any cached translation
+  // on engineMetadata) by id without scanning the list per render.
+  const insightById = useMemo(() => new Map(insights.map((insight) => [insight.id, insight])), [insights]);
+
+  // The display text pieces of an assist card, each tagged with the insight it came from
+  // so it can be translated and cached independently. A question card has two: the question
+  // and its suggested reply; every other card has one.
+  function assistPieces(item: AssistItem): { id: string; text: string }[] {
+    if (item.kind === "QUESTION") {
+      const pieces = [{ id: item.ids[0], text: item.question ?? "" }];
+      if (item.reply && item.ids[1]) {
+        pieces.push({ id: item.ids[1], text: item.reply });
+      }
+      return pieces;
+    }
+    return [{ id: item.ids[0], text: item.body ?? "" }];
+  }
+
+  function cachedInsightTranslation(insightId: string, displayText: string): { text: string; sourceHash: string } | undefined {
+    const hash = hashTranscriptText(displayText);
+    const local = insightTranslations[insightId];
+    if (local && local.sourceHash === hash) {
+      return local;
+    }
+    const stored = insightById.get(insightId)?.engineMetadata?.translation;
+    if (stored && stored.sourceHash === hash) {
+      return { text: stored.text, sourceHash: hash };
+    }
+    return undefined;
+  }
+
+  async function toggleAssistTranslation(item: AssistItem): Promise<void> {
+    setAssistTranslateError("");
+    if (showAssistTranslation[item.key]) {
+      setShowAssistTranslation((current) => ({ ...current, [item.key]: false }));
+      return;
+    }
+    const pieces = assistPieces(item).filter((piece) => piece.text.trim());
+    if (pieces.every((piece) => cachedInsightTranslation(piece.id, piece.text))) {
+      setShowAssistTranslation((current) => ({ ...current, [item.key]: true }));
+      return;
+    }
+    markTranslating(item.key);
+    try {
+      // Translate every uncached piece (question + reply) concurrently; the card flips to
+      // Vietnamese only once all of them resolve.
+      await Promise.all(pieces.map(async (piece) => {
+        if (cachedInsightTranslation(piece.id, piece.text)) {
+          return;
+        }
+        const result = await fetch(`/api/meetings/${meetingId}/insights/${piece.id}/translate`, { method: "POST" });
+        const body = await result.json().catch(() => ({}));
+        if (!result.ok) {
+          throw new Error(body.error ?? "Could not translate.");
+        }
+        const text: string = body.translation?.text ?? "";
+        if (!text) {
+          throw new Error("Translation was empty.");
+        }
+        setInsightTranslations((current) => ({
+          ...current,
+          [piece.id]: { text, sourceHash: hashTranscriptText(piece.text) },
+        }));
+      }));
+      setShowAssistTranslation((current) => ({ ...current, [item.key]: true }));
+    } catch (error) {
+      setAssistTranslateError(error instanceof Error ? error.message : "Could not translate.");
+    } finally {
+      unmarkTranslating(item.key);
+    }
+  }
+
+  // Hide fragments that a correction merge has superseded; their merged replacement is
+  // shown in their place (it sorts into the same spot by startedAt). Memoized like its
+  // siblings so a poll/toggle that doesn't change `utterances` doesn't re-scan the list.
+  const visibleUtterances = useMemo(
+    () => utterances.filter((utterance) => !utterance.supersededBy),
+    [utterances],
+  );
+
   // Synthesized rolling notes come from the latest MeetingSummary (newest first).
   const latestNotes = summaries[0];
   const hasNotes = Boolean(
@@ -551,7 +728,7 @@ export function LiveMeetingWorkspace({
               Transcript
               {capturing ? <span className="bubble-live">live</span> : null}
             </h3>
-            <span className="rail-count">{utterances.length} lines</span>
+            <span className="rail-count">{visibleUtterances.length} lines</span>
           </div>
           {canDiarize ? (
             <div className="speaker-diarize-card" aria-label="Speaker diarization">
@@ -566,8 +743,15 @@ export function LiveMeetingWorkspace({
             </div>
           ) : null}
           {speakerError ? <p className="speaker-error inline-speaker-error">{speakerError}</p> : null}
+          {translateError ? <p className="speaker-error inline-speaker-error">{translateError}</p> : null}
           <div className="transcript-feed" ref={transcriptFeedRef}>
-            {utterances.length ? utterances.map((utterance) => (
+            {visibleUtterances.length ? visibleUtterances.map((utterance) => {
+              // Resolve the cached translation once per row (it hashes the line text);
+              // calling it twice per render over a long transcript wastes main-thread work.
+              const cached = cachedTranslation(utterance);
+              const showingTranslation = Boolean(showTranslation[utterance.id]) && Boolean(cached);
+              const displayedText = showingTranslation ? (cached?.text ?? utterance.text) : utterance.text;
+              return (
               <article
                 key={utterance.id}
                 className={`bubble ${utterance.speakerRole === "SELF" ? "bubble-self" : "bubble-other"}${utterance.interim ? " bubble-interim" : ""}`}
@@ -607,12 +791,26 @@ export function LiveMeetingWorkspace({
                   {utterance.interim ? (
                     <span className="bubble-live">refining</span>
                   ) : (
-                    <span className="bubble-meta">{utterance.sourceChannel} · {new Date(utterance.startedAt).toLocaleTimeString()}</span>
+                    <span className="bubble-head-meta">
+                      <span className="bubble-meta">{utterance.sourceChannel} · {new Date(utterance.startedAt).toLocaleTimeString()}</span>
+                      <button
+                        type="button"
+                        className={`bubble-translate${showingTranslation ? " bubble-translate-active" : ""}`}
+                        onClick={() => void toggleTranslation(utterance)}
+                        disabled={translatingIds.has(utterance.id)}
+                        aria-pressed={showingTranslation}
+                        title={showingTranslation ? "Show original" : "Translate to Vietnamese"}
+                        aria-label={showingTranslation ? "Show original" : "Translate to Vietnamese"}
+                      >
+                        <TranslateIcon />
+                      </button>
+                    </span>
                   )}
                 </header>
-                <p className="bubble-text">{utterance.text}</p>
+                <p className="bubble-text">{displayedText}</p>
               </article>
-            )) : (
+              );
+            }) : (
               <div className="empty-state">
                 <span className="eq" aria-hidden>
                   <span /><span /><span /><span /><span />
@@ -638,28 +836,51 @@ export function LiveMeetingWorkspace({
               <h3>Assist now</h3>
               <span className="rail-count">{assistItems.length || ""}</span>
             </div>
+            {assistTranslateError ? <p className="speaker-error inline-speaker-error">{assistTranslateError}</p> : null}
             {assistItems.length ? (
               <div className="assist-feed">
                 {assistItems.map((item) => {
                   const meta = ASSIST_KINDS[item.kind];
+                  // Show the Vietnamese view only once every piece of the card is cached, so
+                  // a question and its reply flip together. `show` picks the right text per piece.
+                  const pieces = assistPieces(item).filter((piece) => piece.text.trim());
+                  const showing = Boolean(showAssistTranslation[item.key])
+                    && pieces.length > 0
+                    && pieces.every((piece) => cachedInsightTranslation(piece.id, piece.text));
+                  const show = (id: string, text: string) => (showing ? cachedInsightTranslation(id, text)?.text ?? text : text);
                   return (
                     <article key={item.key} className={`assist-item assist-${item.kind.toLowerCase()}${isNewItem(item) ? " is-new" : ""}`}>
                       <header className="assist-item-head">
                         <span className="assist-kind"><span className="assist-icon" aria-hidden>{meta.icon}</span>{meta.label}</span>
-                        <span className="assist-time">{isNewItem(item) ? <span className="assist-new">new</span> : null}{relativeTime(item.createdAt)}</span>
+                        <span className="assist-head-meta">
+                          <span className="assist-time">{isNewItem(item) ? <span className="assist-new">new</span> : null}{relativeTime(item.createdAt)}</span>
+                          {pieces.length ? (
+                            <button
+                              type="button"
+                              className={`bubble-translate${showing ? " bubble-translate-active" : ""}`}
+                              onClick={() => void toggleAssistTranslation(item)}
+                              disabled={translatingIds.has(item.key)}
+                              aria-pressed={showing}
+                              title={showing ? "Show original" : "Translate to Vietnamese"}
+                              aria-label={showing ? "Show original" : "Translate to Vietnamese"}
+                            >
+                              <TranslateIcon />
+                            </button>
+                          ) : null}
+                        </span>
                       </header>
                       {item.kind === "QUESTION" ? (
                         <>
-                          <p className="assist-question">{item.question}</p>
+                          <p className="assist-question">{show(item.ids[0], item.question ?? "")}</p>
                           {item.reply ? (
                             <div className="assist-reply">
                               <span className="assist-reply-label">Suggested reply</span>
-                              <p>{item.reply}</p>
+                              <p>{item.ids[1] ? show(item.ids[1], item.reply) : item.reply}</p>
                             </div>
                           ) : null}
                         </>
                       ) : (
-                        <p className="assist-body">{item.body}</p>
+                        <p className="assist-body">{show(item.ids[0], item.body ?? "")}</p>
                       )}
                       {item.keywords.length ? (
                         <div className="kw-row">
@@ -790,6 +1011,15 @@ function speakerLabel(role: SpeakerRole): string {
   return "Unknown";
 }
 
+// Standard "translate" glyph (Latin A + CJK 文) used on the per-message translate toggle.
+function TranslateIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor" aria-hidden focusable="false">
+      <path d="M12.87 15.07l-2.54-2.51.03-.03c1.74-1.94 2.98-4.17 3.71-6.53H17V4h-7V2H8v2H1v1.99h11.17C11.5 7.92 10.44 9.75 9 11.35 8.07 10.32 7.3 9.19 6.69 8h-2c.73 1.63 1.73 3.17 2.98 4.56l-5.09 5.02L4 19l5-5 3.11 3.11.76-2.04zM18.5 10h-2L12 22h2l1.12-3h4.75L21 22h2l-4.5-12zm-2.62 7l1.62-4.33L19.12 17h-3.24z" />
+    </svg>
+  );
+}
+
 function buildSpeakerAliases(utterances: Utterance[]): Record<number, string> {
   const aliases: Record<number, string> = {};
   for (const utterance of utterances) {
@@ -833,10 +1063,6 @@ const ASSIST_KINDS: Record<AssistItem["kind"], { icon: string; label: string }> 
   NOTE: { icon: "•", label: "Note" },
 };
 
-function stripPrefix(text: string, prefix: RegExp): string {
-  return text.replace(prefix, "").trim();
-}
-
 // Collapses the engine's raw insights (newest first) into display cards. A question
 // and the answer suggestion emitted from the same utterance are merged so they read
 // as one item; everything else stays a standalone card. Order is preserved, so the
@@ -850,7 +1076,7 @@ function buildAssistItems(insights: Insight[]): AssistItem[] {
       answerByUtterance.set(key, insight);
     }
     if (insight.kind === "QUESTION_FOR_YOU" && !questionTextByUtterance.has(key)) {
-      questionTextByUtterance.set(key, stripPrefix(insight.text, /^Possible question for you:\s*/i));
+      questionTextByUtterance.set(key, assistInsightDisplayText(insight.kind, insight.text));
     }
   }
 
@@ -867,12 +1093,12 @@ function buildAssistItems(insights: Insight[]): AssistItem[] {
         ids: answer ? [insight.id, answer.id] : [insight.id],
         kind: "QUESTION",
         createdAt: insight.createdAt,
-        question: stripPrefix(insight.text, /^Possible question for you:\s*/i),
-        reply: answer ? stripPrefix(answer.text, /^Reply idea:\s*/i) : undefined,
+        question: assistInsightDisplayText(insight.kind, insight.text),
+        reply: answer ? assistInsightDisplayText(answer.kind, answer.text) : undefined,
         keywords: insight.keywords,
       });
     } else if (insight.kind === "ACTION_ITEM") {
-      const body = stripPrefix(insight.text, /^Likely action item:\s*/i);
+      const body = assistInsightDisplayText(insight.kind, insight.text);
       // Skip an action that is just the same sentence already shown as a question
       // (e.g. "can you confirm?" matches both patterns) so the feed isn't doubled.
       if (questionTextByUtterance.get(utteranceKey) === body) {
@@ -892,7 +1118,7 @@ function buildAssistItems(insights: Insight[]): AssistItem[] {
         ids: [insight.id],
         kind: "MENTION",
         createdAt: insight.createdAt,
-        body: stripPrefix(insight.text, /^Your name was mentioned:\s*/i),
+        body: assistInsightDisplayText(insight.kind, insight.text),
         keywords: insight.keywords,
       });
     } else {
