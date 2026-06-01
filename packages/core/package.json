@@ -4,7 +4,9 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./hash": "./src/domain/hash.ts",
+    "./assist-display": "./src/domain/assist-display.ts"
   },
   "dependencies": {
     "sanitize-html": "^2.17.0",

@@ -1,4 +1,11 @@
 import { z } from "zod";
+import { ASSIST_LABEL_PREFIXES } from "./assist-display";
+import {
+  isInterimMetadata,
+  mergedSourceIdsFromMetadata,
+  speakerKeyFromMetadata,
+  supersededByFromMetadata,
+} from "./speaker-metadata";
 
 export const meetingPlatformSchema = z.enum(["TEAMS", "GOOGLE_MEET", "ZOOM", "BROWSER", "OTHER"]);
 export type MeetingPlatform = z.infer<typeof meetingPlatformSchema>;
@@ -120,6 +127,148 @@ export type MeetingNotesContext = {
   transcript: MeetingTranscriptLine[];
 };
 
+// Input for merge-correction: the ordered text fragments of one spoken utterance that
+// the speech-to-text split across rows, plus the speaker for context.
+export type TranscriptCorrectionContext = {
+  speaker?: string;
+  segments: string[];
+};
+
+// Input for translating a single transcript line into the target language. `context` holds
+// a few surrounding transcript lines (reference only — not translated) so the model can
+// resolve pronouns/terms that a line in isolation would lose.
+export type TranslationContext = {
+  text: string;
+  targetLanguage: string;
+  context?: string[];
+};
+
+// A finalized transcript row considered for merge-correction. Mirrors the relevant
+// TranscriptUtterance columns without importing Prisma types into core.
+export type MergeCandidate = {
+  id: string;
+  speakerRole: MeetingSpeakerRole;
+  sourceChannel: MeetingSourceChannel;
+  startedAt: Date;
+  endedAt?: Date | null;
+  text: string;
+  confidence?: number | null;
+  engineMetadata?: unknown;
+};
+
+export type MergeGroup = {
+  members: MergeCandidate[];
+};
+
+// Consecutive same-speaker fragments closer together than this are candidates to be
+// one sentence the speech-to-text chopped on a brief pause.
+export const MERGE_MAX_GAP_MS = 2500;
+
+// A turn normally closes (becoming mergeable) when another speaker takes over or the
+// speaker pauses past MERGE_MAX_GAP_MS. A continuous solo monologue (no speaker change, no
+// long pause, no sentence-final punctuation) would never close live and only stitch at the
+// end. Once an open trailing run grows past this many fragments, close all but the most
+// recent one so a monologue still merges incrementally while it is being spoken.
+export const MERGE_MAX_OPEN_RUN = 6;
+
+// True when text ends on sentence-final punctuation (allowing trailing quotes/brackets),
+// i.e. it reads as a complete sentence rather than a cut-off fragment.
+export function endsWithTerminalPunctuation(text: string): boolean {
+  return /[.!?…]["')\]]*\s*$/.test(text.trim());
+}
+
+function spanEndMs(candidate: MergeCandidate): number {
+  return (candidate.endedAt ?? candidate.startedAt).getTime();
+}
+
+function eligibleMergeCandidates(utterances: MergeCandidate[]): MergeCandidate[] {
+  return [...utterances]
+    .filter(
+      (utterance) =>
+        utterance.text.trim() &&
+        !isInterimMetadata(utterance.engineMetadata) &&
+        !mergedSourceIdsFromMetadata(utterance.engineMetadata) &&
+        !supersededByFromMetadata(utterance.engineMetadata),
+    )
+    .sort((a, b) => a.startedAt.getTime() - b.startedAt.getTime());
+}
+
+// True when `next` reads as a continuation of `previous`'s spoken turn: same speaker
+// (role + diarized key) and channel, only a small pause between them, and `previous` did
+// not already end on sentence-final punctuation. This is the single boundary rule shared
+// by grouping and by `closedMergeCandidates` so the merge trigger and the merge grouping
+// can never disagree.
+function mergeContinues(previous: MergeCandidate, next: MergeCandidate): boolean {
+  return (
+    next.speakerRole === previous.speakerRole &&
+    next.sourceChannel === previous.sourceChannel &&
+    speakerKeyFromMetadata(next.engineMetadata) === speakerKeyFromMetadata(previous.engineMetadata) &&
+    next.startedAt.getTime() - spanEndMs(previous) <= MERGE_MAX_GAP_MS &&
+    !endsWithTerminalPunctuation(previous.text)
+  );
+}
+
+// Deterministically group consecutive utterances that look like one sentence split
+// across rows: same speaker (role + diarized key) and channel, a small inter-row gap,
+// and a previous fragment that does NOT end on sentence-final punctuation. Interim,
+// already-merged, already-superseded, and empty rows are ignored. Only groups of two or
+// more rows are returned (a lone row needs no correction). The model decides the merged
+// text; this function only decides which rows are candidates.
+export function groupMergeableUtterances(utterances: MergeCandidate[]): MergeGroup[] {
+  const eligible = eligibleMergeCandidates(utterances);
+
+  const groups: MergeGroup[] = [];
+  let current: MergeCandidate[] = [];
+
+  const flush = () => {
+    if (current.length >= 2) {
+      groups.push({ members: current });
+    }
+    current = [];
+  };
+
+  for (const utterance of eligible) {
+    if (!current.length) {
+      current = [utterance];
+      continue;
+    }
+    if (mergeContinues(current[current.length - 1], utterance)) {
+      current.push(utterance);
+    } else {
+      flush();
+      current = [utterance];
+    }
+  }
+  flush();
+
+  return groups;
+}
+
+// The trailing turn may still be growing — the speaker could resume after a brief pause —
+// so during a live meeting it is not yet safe to merge. A turn is only "closed" once a
+// boundary follows it: a different speaker takes over, or the same speaker pauses past
+// MERGE_MAX_GAP_MS (or ends on sentence-final punctuation). This drops that still-open
+// trailing run and returns only the closed turns, so live correction fires on a speaker
+// change rather than after an arbitrary number of new rows. The end-of-meeting pass merges
+// everything instead and does not need this.
+export function closedMergeCandidates(utterances: MergeCandidate[]): MergeCandidate[] {
+  const eligible = eligibleMergeCandidates(utterances);
+  if (eligible.length < 2) {
+    return [];
+  }
+  let openRunStart = eligible.length - 1;
+  while (openRunStart > 0 && mergeContinues(eligible[openRunStart - 1], eligible[openRunStart])) {
+    openRunStart -= 1;
+  }
+  // A monologue whose open run never closes would never merge live. Once the open run is
+  // long enough that waiting is pointless, close all but the most recent fragment (which may
+  // still continue the current sentence), so the bulk of the monologue stitches live.
+  if (eligible.length - openRunStart > MERGE_MAX_OPEN_RUN) {
+    return eligible.slice(0, eligible.length - 1);
+  }
+  return eligible.slice(0, openRunStart);
+}
+
 export type MeetingAssistDetectionInput = {
   utteranceId: string;
   text: string;
@@ -170,7 +319,7 @@ export function detectMeetingAssistInsights(input: MeetingAssistDetectionInput):
     const questionKeywords = extractKeywords(questionText);
     insights.push({
       kind: "QUESTION_FOR_YOU",
-      text: `Possible question for you: ${questionText}`,
+      text: `${ASSIST_LABEL_PREFIXES.QUESTION_FOR_YOU} ${questionText}`,
       keywords: questionKeywords,
       relatedUtteranceIds: [input.utteranceId],
       confidence: questionText.includes("?") ? 0.85 : 0.72,
@@ -188,7 +337,7 @@ export function detectMeetingAssistInsights(input: MeetingAssistDetectionInput):
     const actionText = matchingSentences(normalizedText, actionPatterns) || normalizedText;
     insights.push({
       kind: "ACTION_ITEM",
-      text: `Likely action item: ${actionText}`,
+      text: `${ASSIST_LABEL_PREFIXES.ACTION_ITEM} ${actionText}`,
       keywords: extractKeywords(actionText),
       relatedUtteranceIds: [input.utteranceId],
       confidence: 0.74,
@@ -199,7 +348,7 @@ export function detectMeetingAssistInsights(input: MeetingAssistDetectionInput):
   if (userName && new RegExp(`\\b${escapeRegExp(userName)}\\b`, "i").test(normalizedText)) {
     insights.push({
       kind: "NAME_MENTION",
-      text: `Your name was mentioned: ${normalizedText}`,
+      text: `${ASSIST_LABEL_PREFIXES.NAME_MENTION} ${normalizedText}`,
       keywords,
       relatedUtteranceIds: [input.utteranceId],
       confidence: 0.78,
@@ -278,11 +427,12 @@ function extractKeywords(text: string): string[] {
 }
 
 function buildAnswerSuggestion(text: string, keywords: string[]): string {
+  const prefix = ASSIST_LABEL_PREFIXES.ANSWER_SUGGESTION;
   if (keywords.length) {
-    return `Reply idea: acknowledge the question, then answer around ${keywords.slice(0, 4).join(", ")}.`;
+    return `${prefix} acknowledge the question, then answer around ${keywords.slice(0, 4).join(", ")}.`;
   }
 
-  return `Reply idea: acknowledge the question, then give a short direct answer. Context: ${text}`;
+  return `${prefix} acknowledge the question, then give a short direct answer. Context: ${text}`;
 }
 
 function escapeRegExp(value: string): string {

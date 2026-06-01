@@ -8,6 +8,7 @@ export type AiProviderSettingsRecord = {
   summarizationProvider: AiProviderKind;
   askAgentProvider: AiProviderKind;
   meetingNotesProvider: AiProviderKind;
+  meetingCorrectionEnabled: boolean;
   localBaseUrl: string | null;
   localModel: string | null;
   localApiKeyEncrypted: string | null;
@@ -40,6 +41,7 @@ export type AiProviderSettingsView = {
   codexModel: string;
   codexTimeoutMs: number;
   meetingNotesEnabled: boolean;
+  meetingCorrectionEnabled: boolean;
 };
 
 type SettingsDelegate = {
@@ -120,6 +122,7 @@ export function getAiProviderSettingsView(
     codexModel: settings?.codexModel ?? "",
     codexTimeoutMs: settings?.codexTimeoutMs ?? defaultProviderTimeoutMs,
     meetingNotesEnabled: env.MEETING_NOTES === "true",
+    meetingCorrectionEnabled: settings?.meetingCorrectionEnabled ?? false,
   };
 }
 

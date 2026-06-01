@@ -34,3 +34,30 @@ export function parseMeetingNotes(text: string): MeetingNotes {
   }
   return meetingNotesSchema.parse(JSON.parse(candidate));
 }
+
+// Reads the `text` field from a {"text":"..."} response, tolerating a model that
+// replied in plain text instead of JSON (fall back to the raw output). A well-formed
+// object with an empty `text` returns "" — it must NOT fall through to the raw output,
+// or the literal JSON (e.g. `{"text":""}`) would leak into the transcript/translation.
+function parseTextField(raw: string): string {
+  const candidate = extractJsonObject(raw);
+  if (candidate) {
+    try {
+      const parsed = JSON.parse(candidate) as { text?: unknown };
+      if (typeof parsed.text === "string") {
+        return parsed.text.trim();
+      }
+    } catch {
+      // Malformed JSON — fall through to the plain-text fallback below.
+    }
+  }
+  return raw.trim();
+}
+
+export function parseTranscriptCorrection(text: string): { text: string } {
+  return { text: parseTextField(text) };
+}
+
+export function parseTranslation(text: string): { text: string } {
+  return { text: parseTextField(text) };
+}

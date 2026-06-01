@@ -1,9 +1,17 @@
 import { revalidatePath } from "next/cache";
 import { notFound } from "next/navigation";
-import { speakerAliasFromMetadata, speakerKeyFromMetadata, speakerLabelFromMetadata } from "@context-pilot/core";
+import {
+  speakerAliasFromMetadata,
+  speakerKeyFromMetadata,
+  speakerLabelFromMetadata,
+  supersededByFromMetadata,
+  translationFromMetadata,
+} from "@context-pilot/core";
 import { prisma } from "@context-pilot/db";
 import { stopCapture } from "../../../../lib/capture/manager";
 import { LiveMeetingWorkspace } from "../../../../components/LiveMeetingWorkspace";
+import { maybeCorrectTranscript } from "../../../../lib/meeting-correction";
+import { TRANSCRIPT_FETCH_WINDOW, visibleTranscriptWindow } from "../../../../lib/meeting-utterances";
 import { importedMediaFileName } from "../../../../lib/imported-diarization";
 
 export const dynamic = "force-dynamic";
@@ -23,6 +31,11 @@ async function endMeeting(formData: FormData) {
   }
 
   await stopCapture(meeting.id);
+
+  // Final stitch pass before ending: the live pass leaves the most recent utterance
+  // untouched (it may still get a continuation), so catch the meeting's tail here.
+  // No-op unless transcript correction is enabled on /settings; swallows its own errors.
+  await maybeCorrectTranscript(meeting.id, { final: true });
 
   const endedAt = new Date();
   await prisma.meetingSession.update({
@@ -49,9 +62,9 @@ export default async function MeetingWorkspacePage({ params }: MeetingWorkspaceP
     where: { id: meetingId },
     include: {
       source: true,
-      // Most recent window (desc) so a long meeting keeps its latest lines; restored
-      // to chronological order below for the transcript view.
-      utterances: { orderBy: { startedAt: "desc" }, take: 1000 },
+      // Wider recent window (desc) so dropping correction-superseded rows still leaves a
+      // full visible window on a long meeting; restored to chronological order below.
+      utterances: { orderBy: { startedAt: "desc" }, take: TRANSCRIPT_FETCH_WINDOW },
       insights: { orderBy: { createdAt: "desc" }, take: 50 },
       summaries: { orderBy: { createdAt: "desc" }, take: 5 },
     },
@@ -61,6 +74,7 @@ export default async function MeetingWorkspacePage({ params }: MeetingWorkspaceP
     notFound();
   }
 
+  meeting.utterances = visibleTranscriptWindow(meeting.utterances);
   meeting.utterances.reverse();
 
   return (
@@ -89,6 +103,8 @@ export default async function MeetingWorkspacePage({ params }: MeetingWorkspaceP
         speakerKey: speakerKeyFromMetadata(utterance.engineMetadata),
         speakerLabel: speakerLabelFromMetadata(utterance.engineMetadata),
         speakerAlias: speakerAliasFromMetadata(utterance.engineMetadata),
+        supersededBy: supersededByFromMetadata(utterance.engineMetadata),
+        translation: translationFromMetadata(utterance.engineMetadata),
       }))}
       initialInsights={meeting.insights.map((insight) => ({
         id: insight.id,
@@ -97,6 +113,7 @@ export default async function MeetingWorkspacePage({ params }: MeetingWorkspaceP
         keywords: insight.keywords,
         relatedUtteranceIds: insight.relatedUtteranceIds,
         createdAt: insight.createdAt.toISOString(),
+        engineMetadata: { translation: translationFromMetadata(insight.engineMetadata) },
       }))}
       initialSummaries={meeting.summaries.map((summary) => ({
         id: summary.id,

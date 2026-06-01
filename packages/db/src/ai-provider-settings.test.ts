@@ -91,6 +91,7 @@ function settingsRecord(overrides: Partial<AiProviderSettingsRecord> = {}): AiPr
     summarizationProvider: "LOCAL_OPENAI",
     askAgentProvider: "LOCAL_OPENAI",
     meetingNotesProvider: "LOCAL_OPENAI",
+    meetingCorrectionEnabled: false,
     localBaseUrl: null,
     localModel: null,
     localApiKeyEncrypted: null,

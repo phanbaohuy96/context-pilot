@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { detectMeetingAssistInsights, isLikelyHallucinatedTranscription, meanTokenConfidence } from "./meetings";
+import {
+  closedMergeCandidates,
+  detectMeetingAssistInsights,
+  endsWithTerminalPunctuation,
+  groupMergeableUtterances,
+  isLikelyHallucinatedTranscription,
+  meanTokenConfidence,
+  type MergeCandidate,
+} from "./meetings";
 
 describe("transcription confidence", () => {
   it("averages real token probabilities and ignores whisper special tokens", () => {
@@ -139,5 +147,130 @@ describe("meeting assist insight detection", () => {
     });
 
     expect(insights).toEqual([]);
+  });
+});
+
+describe("endsWithTerminalPunctuation", () => {
+  it("treats sentence-final punctuation (with trailing quotes) as complete", () => {
+    expect(endsWithTerminalPunctuation("All done.")).toBe(true);
+    expect(endsWithTerminalPunctuation("Really?")).toBe(true);
+    expect(endsWithTerminalPunctuation('He said "go."')).toBe(true);
+  });
+
+  it("treats a cut-off clause as incomplete", () => {
+    expect(endsWithTerminalPunctuation("so I was thinking")).toBe(false);
+    expect(endsWithTerminalPunctuation("the number is 3,000 and")).toBe(false);
+  });
+});
+
+describe("groupMergeableUtterances", () => {
+  const base = (over: Omit<Partial<MergeCandidate>, "startedAt"> & { id: string; startedAt: number; text: string }): MergeCandidate => ({
+    speakerRole: "OTHER",
+    sourceChannel: "LOOPBACK",
+    endedAt: new Date(over.startedAt + 1000),
+    engineMetadata: {},
+    ...over,
+    startedAt: new Date(over.startedAt),
+  });
+
+  it("groups consecutive same-speaker fragments split mid-sentence", () => {
+    const groups = groupMergeableUtterances([
+      base({ id: "a", startedAt: 0, text: "so I was thinking we should" }),
+      base({ id: "b", startedAt: 1500, text: "move the deadline to Friday." }),
+    ]);
+    expect(groups).toHaveLength(1);
+    expect(groups[0].members.map((member) => member.id)).toEqual(["a", "b"]);
+  });
+
+  it("does not group after a sentence that ends cleanly", () => {
+    const groups = groupMergeableUtterances([
+      base({ id: "a", startedAt: 0, text: "That works for me." }),
+      base({ id: "b", startedAt: 1500, text: "Anything else to cover?" }),
+    ]);
+    expect(groups).toEqual([]);
+  });
+
+  it("does not group across a large pause, speaker, or channel change", () => {
+    const bigGap = groupMergeableUtterances([
+      base({ id: "a", startedAt: 0, text: "I was about to" }),
+      base({ id: "b", startedAt: 9000, text: "say something else" }),
+    ]);
+    expect(bigGap).toEqual([]);
+
+    const otherSpeaker = groupMergeableUtterances([
+      base({ id: "a", startedAt: 0, text: "I was about to", engineMetadata: { speakerKey: 1 } }),
+      base({ id: "b", startedAt: 1500, text: "say something else", engineMetadata: { speakerKey: 2 } }),
+    ]);
+    expect(otherSpeaker).toEqual([]);
+
+    const otherChannel = groupMergeableUtterances([
+      base({ id: "a", startedAt: 0, text: "I was about to", sourceChannel: "MIC" }),
+      base({ id: "b", startedAt: 1500, text: "say something else", sourceChannel: "LOOPBACK" }),
+    ]);
+    expect(otherChannel).toEqual([]);
+  });
+
+  it("ignores interim, already-merged, already-superseded, and empty rows", () => {
+    const groups = groupMergeableUtterances([
+      base({ id: "interim", startedAt: 0, text: "draft text", engineMetadata: { interim: true } }),
+      base({ id: "a", startedAt: 1000, text: "we need to" }),
+      base({ id: "superseded", startedAt: 1200, text: "old fragment", engineMetadata: { supersededBy: "x" } }),
+      base({ id: "b", startedAt: 2000, text: "finish the report" }),
+      base({ id: "merged", startedAt: 2200, text: "we need to finish the report", engineMetadata: { merged: true, sourceUtteranceIds: ["a", "b"] } }),
+    ]);
+    expect(groups).toHaveLength(1);
+    expect(groups[0].members.map((member) => member.id)).toEqual(["a", "b"]);
+  });
+});
+
+describe("closedMergeCandidates", () => {
+  const base = (over: Omit<Partial<MergeCandidate>, "startedAt"> & { id: string; startedAt: number; text: string }): MergeCandidate => ({
+    speakerRole: "OTHER",
+    sourceChannel: "LOOPBACK",
+    endedAt: new Date(over.startedAt + 1000),
+    engineMetadata: {},
+    ...over,
+    startedAt: new Date(over.startedAt),
+  });
+
+  it("withholds a single speaker's still-open turn (no boundary has closed it yet)", () => {
+    // Same speaker, small gaps: the turn could still continue, so nothing is closed yet —
+    // the end-of-meeting final pass handles a monologue instead of the live pass.
+    const candidates = closedMergeCandidates([
+      base({ id: "a", startedAt: 0, text: "so I was thinking we should" }),
+      base({ id: "b", startedAt: 1500, text: "probably move the" }),
+    ]);
+    expect(candidates).toEqual([]);
+  });
+
+  it("closes the prior turn once a different speaker takes over", () => {
+    const candidates = closedMergeCandidates([
+      base({ id: "a", startedAt: 0, text: "so I was thinking we should", engineMetadata: { speakerKey: 1 } }),
+      base({ id: "b", startedAt: 1500, text: "probably move the", engineMetadata: { speakerKey: 1 } }),
+      base({ id: "c", startedAt: 3500, text: "Sounds good to me.", engineMetadata: { speakerKey: 2 } }),
+    ]);
+    // a+b are closed by speaker 2 starting; c is the open trailing turn and is withheld.
+    expect(candidates.map((candidate) => candidate.id)).toEqual(["a", "b"]);
+  });
+
+  it("closes a turn when the same speaker resumes after a long pause", () => {
+    const candidates = closedMergeCandidates([
+      base({ id: "a", startedAt: 0, text: "so I was thinking we should" }),
+      base({ id: "b", startedAt: 1500, text: "move the deadline" }),
+      base({ id: "c", startedAt: 12000, text: "and also revisit scope" }),
+    ]);
+    // The >2.5s gap before c closes a+b; c becomes the open trailing turn.
+    expect(candidates.map((candidate) => candidate.id)).toEqual(["a", "b"]);
+  });
+
+  it("closes all but the last fragment of an over-long open run (solo monologue)", () => {
+    // A continuous same-speaker run with no pause, speaker change, or terminal punctuation
+    // would otherwise never close live. Past MERGE_MAX_OPEN_RUN (6) fragments, every fragment
+    // except the most recent (which may still continue) becomes a live merge candidate.
+    const rows = Array.from({ length: 8 }, (_, index) =>
+      base({ id: `f${index}`, startedAt: index * 1500, text: `fragment ${index} keeps going` }),
+    );
+    const candidates = closedMergeCandidates(rows);
+    expect(candidates.map((candidate) => candidate.id)).toEqual(["f0", "f1", "f2", "f3", "f4", "f5", "f6"]);
   });
 });

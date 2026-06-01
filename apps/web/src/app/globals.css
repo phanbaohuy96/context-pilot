@@ -1006,6 +1006,12 @@ pre {
   white-space: nowrap;
 }
 
+.assist-head-meta {
+  align-items: center;
+  display: inline-flex;
+  gap: 8px;
+}
+
 .assist-new {
   display: inline-flex;
   align-items: center;
@@ -1454,6 +1460,42 @@ p.assist-question {
   color: var(--muted);
   font-family: var(--font-mono);
   font-size: 11px;
+}
+
+.bubble-head-meta {
+  align-items: center;
+  display: inline-flex;
+  gap: 8px;
+}
+
+.bubble-translate {
+  align-items: center;
+  background: transparent;
+  border: 1px solid var(--border-strong);
+  border-radius: 7px;
+  box-shadow: none;
+  color: var(--muted);
+  display: inline-flex;
+  justify-content: center;
+  padding: 2px 4px;
+}
+
+.bubble-translate:hover {
+  background: transparent;
+  box-shadow: none;
+  color: var(--accent-2);
+  filter: none;
+  transform: none;
+}
+
+.bubble-translate:disabled {
+  cursor: progress;
+  opacity: 0.55;
+}
+
+.bubble-translate-active {
+  border-color: var(--accent-line);
+  color: var(--accent-2);
 }
 
 .bubble-interim {

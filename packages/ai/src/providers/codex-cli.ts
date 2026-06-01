@@ -2,13 +2,28 @@ import { spawn } from "node:child_process";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import type { AgentAnswer, AgentContextBundle, MeetingNotesContext } from "@context-pilot/core";
-import { parseMeetingNotes, parseRequirementExtraction } from "../json";
+import type {
+  AgentAnswer,
+  AgentContextBundle,
+  MeetingNotesContext,
+  TranscriptCorrectionContext,
+  TranslationContext,
+} from "@context-pilot/core";
+import { parseMeetingNotes, parseRequirementExtraction, parseTranscriptCorrection, parseTranslation } from "../json";
 import { buildAnswerPrompt } from "../prompts/answer";
 import { buildMeetingNotesPrompt } from "../prompts/meeting-notes";
 import { buildRequirementsPrompt } from "../prompts/requirements";
 import { buildSummarizePrompt } from "../prompts/summarize";
-import type { AiProvider, MeetingNotesResult, RequirementExtractionResult, ThreadSummaryResult } from "../provider";
+import { buildTranscriptCorrectionPrompt } from "../prompts/transcript-correction";
+import { buildTranslatePrompt } from "../prompts/translate";
+import type {
+  AiProvider,
+  MeetingNotesResult,
+  RequirementExtractionResult,
+  ThreadSummaryResult,
+  TranscriptCorrectionResult,
+  TranslationResult,
+} from "../provider";
 
 export type CodexCliProviderConfig = {
   command: string;
@@ -56,6 +71,16 @@ export class CodexCliProvider implements AiProvider {
     const text = await this.runCodex(buildMeetingNotesPrompt(input));
     const parsed = parseMeetingNotes(text);
     return { ...parsed, model: this.model };
+  }
+
+  async correctTranscript(input: TranscriptCorrectionContext): Promise<TranscriptCorrectionResult> {
+    const text = await this.runCodex(buildTranscriptCorrectionPrompt(input));
+    return { ...parseTranscriptCorrection(text), model: this.model };
+  }
+
+  async translateText(input: TranslationContext): Promise<TranslationResult> {
+    const text = await this.runCodex(buildTranslatePrompt(input));
+    return { ...parseTranslation(text), model: this.model };
   }
 
   private async runCodex(prompt: string): Promise<string> {

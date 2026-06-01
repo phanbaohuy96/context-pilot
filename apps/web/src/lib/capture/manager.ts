@@ -14,6 +14,7 @@ import {
   type TranscriptionSegment,
 } from "@context-pilot/core";
 import { prisma } from "@context-pilot/db";
+import { maybeCorrectTranscript } from "../meeting-correction";
 import { createDeterministicMeetingInsights } from "../meeting-insights";
 import { maybeGenerateMeetingNotes } from "../meeting-notes";
 import { embedSpeaker, speakerSimilarityThreshold, warmupDiarizer } from "./diarizer";
@@ -68,6 +69,14 @@ function whisperModelPath(): string {
 
 function ffmpegFormat(): string {
   return process.env.MEETING_CAPTURE_FFMPEG_FORMAT ?? "avfoundation";
+}
+
+// Live devices already stream at real time; a file input is read as fast as the disk
+// allows, which collapses a whole meeting into a couple of cap-sized utterances before the
+// runner stops. Opt-in `-re` paces a file input at its native rate so capture behaves like
+// a live session (used to replay a recording through the pipeline). Off for device capture.
+function ffmpegReadsRealtime(): boolean {
+  return process.env.MEETING_CAPTURE_FFMPEG_INPUT_REALTIME === "true";
 }
 
 function normalizeTranscription(text: string): string {
@@ -219,6 +228,7 @@ class CaptureRunner {
 
     const args = [
       "-hide_banner", "-loglevel", "error", "-y",
+      ...(ffmpegReadsRealtime() ? ["-re"] : []),
       "-f", ffmpegFormat(), "-i", this.input,
       "-ac", "1",
       "-ar", "16000",
@@ -489,6 +499,9 @@ class CaptureRunner {
 
       // Refresh the rolling LLM notes off the capture path (throttled per meeting).
       void maybeGenerateMeetingNotes(this.meetingId);
+      // Stitch fragmented utterances back into sentences off the capture path once a
+      // speaker's turn is closed (no-op unless correction is enabled on /settings).
+      void maybeCorrectTranscript(this.meetingId);
     } catch (error) {
       this.lastError = error instanceof Error ? error.message : String(error);
     } finally {
