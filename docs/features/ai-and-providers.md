@@ -46,7 +46,7 @@ The `/settings` dashboard page stores tenant-wide provider defaults in Postgres 
 
 - Teams summarization and requirement extraction.
 - Ask agent.
-- Rolling meeting notes, when `MEETING_NOTES=true`.
+- Rolling meeting notes, when enabled on `/settings`.
 
 The settings row also stores shared provider config for the local OpenAI-compatible endpoint, Claude Code CLI, and Codex CLI. A local API key saved from the page is encrypted with `SETTINGS_ENCRYPTION_KEY`; decrypted secrets are never returned to the UI, which only shows whether a key exists. If there is no settings row, feature execution falls back to hard-coded local defaults: each feature uses `LOCAL_OPENAI`, local base URL `http://localhost:11434/v1`, model `llama3.1`, CLI commands `claude`/`codex`, and 120s timeouts.
 
@@ -84,7 +84,7 @@ flowchart LR
 
 ### Meeting notes (web)
 
-When enabled (`MEETING_NOTES=true`), `apps/web/src/lib/meeting-notes.ts` summarizes the transcript during the meeting. It is fire-and-forget off the capture path, throttled per meeting, resolves the configured Meeting notes provider, and upserts a single rolling `MeetingSummary` via `summarizeMeeting`. See [meeting-assistant.md](meeting-assistant.md).
+When enabled on `/settings`, `apps/web/src/lib/meeting-notes.ts` summarizes the transcript during the meeting. It is fire-and-forget off the capture path, throttled per meeting, resolves the configured Meeting notes provider, and upserts a single rolling `MeetingSummary` via `summarizeMeeting`. See [meeting-assistant.md](meeting-assistant.md).
 
 ## What stays off the provider
 
@@ -95,4 +95,4 @@ Both are described in [meeting-assistant.md](meeting-assistant.md).
 
 ## Configuration summary
 
-Provider runtime settings live in `/settings`, not env. Env is still used for infrastructure (`DATABASE_URL`, `REDIS_URL`, Graph credentials), `SETTINGS_ENCRYPTION_KEY`, and feature gates such as `MEETING_NOTES`.
+Provider runtime settings and meeting feature toggles (rolling notes, diarization, transcript correction) live in `/settings`, not env. Env is still used for infrastructure (`DATABASE_URL`, `REDIS_URL`, Graph credentials), `SETTINGS_ENCRYPTION_KEY`, and per-machine capture tuning.

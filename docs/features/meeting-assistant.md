@@ -94,14 +94,14 @@ Key parameters (in `apps/web/src/lib/capture/manager.ts`):
 
 ### Speaker diarization (others channel)
 
-**Opt-in for live capture** (off by default; enable with `MEETING_CAPTURE_DIARIZATION="true"` — it downloads a model on first use). The mic channel is a single speaker (you → `SELF`). The **others** channel carries every remote participant, so when enabled each finalized utterance there is grouped into a stable per-meeting **Speaker N** identity. Imported recordings can also be post-processed explicitly with `POST /api/meetings/[id]/speakers/diarize`, which requires the meeting's `externalContextId` to name the same ignored `tmp/` media file, slices imported remote utterances by their timestamps, and applies the same local embedding/clustering flow.
+**Opt-in for live capture** (off by default; enable per tenant on `/settings` — it downloads a model on first use). The capture route reads the tenant's `diarizationEnabled` toggle and passes it into the capture manager. The mic channel is a single speaker (you → `SELF`). The **others** channel carries every remote participant, so when enabled each finalized utterance there is grouped into a stable per-meeting **Speaker N** identity. Imported recordings can also be post-processed explicitly with `POST /api/meetings/[id]/speakers/diarize`, which requires the meeting's `externalContextId` to name the same ignored `tmp/` media file, slices imported remote utterances by their timestamps, and applies the same local embedding/clustering flow.
 
 - `apps/web/src/lib/capture/diarizer.ts` embeds utterance audio with a local ONNX speaker model (`Xenova/wavlm-base-plus-sv`, run via `@huggingface/transformers`/onnxruntime, downloaded to the model cache on first use).
 - `assignSpeaker` in `packages/core/src/domain/diarization.ts` does the grouping: cosine-compare the embedding to each existing speaker centroid, join the best match above the similarity threshold, else start a new speaker. Pure and deterministic — only the embedding is a model call.
 - The label is stored on the utterance's `engineMetadata.speakerLabel` (no schema change) and shown in the transcript; `speakerKey` is the 1-based id.
 - The transcript UI exposes discovered `Speaker N` labels directly in transcript rows. Without real diarization metadata, remote audio stays as plain `Participant`; the UI can offer a manual diarization action, but it does not present fake numbered participants as renameable speakers.
 - Renaming a real diarized voice happens inline from a transcript row and writes `engineMetadata.speakerAlias` to matching existing utterances; later transcript rendering and rolling notes prefer alias → diarized label → role fallback.
-- Accuracy is **approximate** — short turns and similar voices on mono 16 kHz audio can be mislabeled. Tuning: `MEETING_CAPTURE_DIARIZATION` (`"true"` to enable live diarization; off otherwise), `MEETING_DIARIZATION_SIMILARITY_THRESHOLD` (default `0.86`; higher splits a speaker, lower merges speakers), `MEETING_DIARIZATION_MODEL`, `MEETING_DIARIZATION_MODEL_CACHE`. If the model fails to load, the utterance is still saved (just without a speaker label).
+- Accuracy is **approximate** — short turns and similar voices on mono 16 kHz audio can be mislabeled. Enable live diarization on `/settings`; per-machine tuning stays in env: `MEETING_DIARIZATION_SIMILARITY_THRESHOLD` (default `0.86`; higher splits a speaker, lower merges speakers), `MEETING_DIARIZATION_MODEL`, `MEETING_DIARIZATION_MODEL_CACHE`. If the model fails to load, the utterance is still saved (just without a speaker label).
 
 ## Assist cards (deterministic)
 
@@ -115,11 +115,11 @@ These are code-driven (no model call) so they're fast and private.
 
 ## Rolling meeting notes (LLM)
 
-**Opt-in** (off by default; enable with `MEETING_NOTES="true"` — it sends transcript text to the configured LLM provider). Separate from the deterministic assist cards, **synthesized notes** are produced by an LLM during the meeting (the assist path stays model-free):
+**Opt-in** (off by default; enable per tenant on `/settings` — it sends transcript text to the configured LLM provider). Separate from the deterministic assist cards, **synthesized notes** are produced by an LLM during the meeting (the assist path stays model-free):
 
 - After a finalized utterance, the capture path calls `maybeGenerateMeetingNotes` (`apps/web/src/lib/meeting-notes.ts`), fire-and-forget. It is throttled per meeting (regenerates every `MEETING_NOTES_MIN_NEW_UTTERANCES` new finalized utterances, default 6) and serialized so the two capture channels can't run it concurrently.
 - It builds a transcript from the recent finalized utterances (with speaker labels) and calls `provider.summarizeMeeting` (`packages/ai`) to get `{ summary, openQuestions, actionItems }`, parsed by `parseMeetingNotes` (tolerant of code fences / surrounding prose). The result upserts the meeting's single rolling `MeetingSummary`.
-- Enable with `MEETING_NOTES="true"` (off by default). Provider comes from `/settings`; without a saved settings row, meeting notes use the hard-coded `LOCAL_OPENAI` default. Failures are logged and swallowed — they never disrupt capture or the transcript.
+- Enable on `/settings` (off by default). The gate and provider both come from the tenant's `AiProviderSettings` row; without a saved settings row, the toggle is off. Failures are logged and swallowed — they never disrupt capture or the transcript.
 - The UI shows the prose `summary` (as **Briefing**), action items, and open questions together in the **Meeting notes** panel of the intelligence rail.
 
 ## Transcript correction (LLM, opt-in)

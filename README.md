@@ -114,8 +114,9 @@ Runtime config is split between environment variables and the database-backed `/
 - **AI providers:** configured from `/settings` and stored in Postgres.
 - **Settings secrets:** `SETTINGS_ENCRYPTION_KEY` is required when saving or using a local API key from `/settings`.
 - **Meeting capture:** `MEETING_CAPTURE_FFMPEG_FORMAT`, `MEETING_CAPTURE_MIC_INPUT`, `MEETING_CAPTURE_MEETING_INPUT`, `MEETING_CAPTURE_TRANSCRIBE_COMMAND`, `MEETING_CAPTURE_WHISPER_MODEL`, `MEETING_CAPTURE_SILENCE_MAX_DB`.
-- **Speaker diarization (opt-in):** `MEETING_CAPTURE_DIARIZATION` (`true` to enable), `MEETING_DIARIZATION_MODEL`, `MEETING_DIARIZATION_SIMILARITY_THRESHOLD`, `MEETING_DIARIZATION_MODEL_CACHE`.
-- **Rolling meeting notes (opt-in):** `MEETING_NOTES` (`true` to enable), `MEETING_NOTES_MIN_NEW_UTTERANCES`.
+- **Meeting feature toggles:** rolling notes, speaker diarization, and transcript correction are opt-in per tenant on `/settings` (not env).
+- **Speaker diarization tuning:** `MEETING_DIARIZATION_MODEL`, `MEETING_DIARIZATION_SIMILARITY_THRESHOLD`, `MEETING_DIARIZATION_MODEL_CACHE` (only relevant when diarization is enabled on `/settings`).
+- **Rolling meeting notes tuning:** `MEETING_NOTES_MIN_NEW_UTTERANCES`.
 
 ## Privacy & policy boundaries
 

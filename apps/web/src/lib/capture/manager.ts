@@ -56,6 +56,9 @@ export type CaptureStatus = {
 export type StartCaptureOptions = {
   mic?: string;
   meeting?: string;
+  // Whether to diarize the "others" channel. Resolved from the tenant's /settings toggle by
+  // the capture route; off by default.
+  diarize?: boolean;
 };
 
 function whisperCommand(): string {
@@ -497,11 +500,20 @@ class CaptureRunner {
         });
       }
 
-      // Refresh the rolling LLM notes off the capture path (throttled per meeting).
-      void maybeGenerateMeetingNotes(this.meetingId);
-      // Stitch fragmented utterances back into sentences off the capture path once a
-      // speaker's turn is closed (no-op unless correction is enabled on /settings).
-      void maybeCorrectTranscript(this.meetingId);
+      // Load the meeting + its tenant's provider settings once and hand it to both off-path
+      // features, so notes and correction don't each re-query the same row every finalize.
+      const meeting = await prisma.meetingSession.findUnique({
+        where: { id: this.meetingId },
+        include: { tenant: { include: { aiProviderSettings: true } } },
+      });
+      if (meeting) {
+        // Refresh the rolling LLM notes off the capture path (throttled per meeting; no-op
+        // unless notes are enabled on /settings).
+        void maybeGenerateMeetingNotes(meeting);
+        // Stitch fragmented utterances back into sentences off the capture path once a
+        // speaker's turn is closed (no-op unless correction is enabled on /settings).
+        void maybeCorrectTranscript(this.meetingId, { settings: meeting.tenant.aiProviderSettings });
+      }
     } catch (error) {
       this.lastError = error instanceof Error ? error.message : String(error);
     } finally {
@@ -577,9 +589,18 @@ export async function startCapture(meetingId: string, options: StartCaptureOptio
     );
   }
   if (options.meeting) {
-    // The "others" channel carries every remote participant — diarize it.
+    // The "others" channel carries every remote participant — diarize it when the tenant
+    // enabled diarization on /settings.
     capture.runners.push(
-      new CaptureRunner(meetingId, "MEETING", "meeting-audio", options.meeting, "OTHER", "LOOPBACK", true),
+      new CaptureRunner(
+        meetingId,
+        "MEETING",
+        "meeting-audio",
+        options.meeting,
+        "OTHER",
+        "LOOPBACK",
+        Boolean(options.diarize),
+      ),
     );
   }
 

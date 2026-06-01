@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   decryptSettingSecret,
   encryptSettingSecret,
+  getAiProviderSettingsView,
   resolveAiProviderConfigFromSettings,
   resolveTenantAiProviderConfig,
   type AiProviderSettingsRecord,
@@ -73,6 +74,19 @@ describe("AI provider settings resolution", () => {
       .toBe("local-api-key");
   });
 
+  it("reads the meeting feature toggles from the DB row, not env", () => {
+    const enabled = getAiProviderSettingsView(
+      settingsRecord({ meetingNotesEnabled: true, diarizationEnabled: true }),
+      { MEETING_NOTES: "false" },
+    );
+    expect(enabled.meetingNotesEnabled).toBe(true);
+    expect(enabled.diarizationEnabled).toBe(true);
+
+    const defaults = getAiProviderSettingsView(null, { MEETING_NOTES: "true" });
+    expect(defaults.meetingNotesEnabled).toBe(false);
+    expect(defaults.diarizationEnabled).toBe(false);
+  });
+
   it("fails loudly when a stored secret is needed but SETTINGS_ENCRYPTION_KEY is missing", () => {
     const encrypted = encryptSettingSecret("local-api-key", { SETTINGS_ENCRYPTION_KEY: "test-secret" });
     const settings = settingsRecord({
@@ -91,6 +105,8 @@ function settingsRecord(overrides: Partial<AiProviderSettingsRecord> = {}): AiPr
     summarizationProvider: "LOCAL_OPENAI",
     askAgentProvider: "LOCAL_OPENAI",
     meetingNotesProvider: "LOCAL_OPENAI",
+    meetingNotesEnabled: false,
+    diarizationEnabled: false,
     meetingCorrectionEnabled: false,
     localBaseUrl: null,
     localModel: null,

@@ -14,20 +14,13 @@ import {
   type MergeGroup,
 } from "@context-pilot/core";
 import { prisma, resolveAiProviderConfigFromSettings } from "@context-pilot/db";
-import type { Prisma } from "@prisma/client";
+import type { AiProviderSettings, Prisma } from "@prisma/client";
 
 // Serializes correction runs per meeting and lets the final pass wait for an in-flight live
 // run instead of dropping it. There is no count throttle: a run only calls the provider when
 // `closedMergeCandidates` exposes a newly-closed multi-fragment turn, and merged rows are
 // excluded next time, so re-running on every finalize is cheap and idempotent.
 const inFlight = new Map<string, Promise<void>>();
-
-// Reading the per-tenant opt-in flag is a joined query; correction is off by default, so once
-// we've seen it disabled we skip re-querying for a short window (a /settings toggle still
-// takes effect within the TTL). Only the disabled result is cached — an enabled run does real
-// work and reloads settings anyway — and the end-of-meeting pass always re-checks fresh.
-const ENABLED_DISABLED_TTL_MS = 5_000;
-const disabledUntil = new Map<string, number>();
 
 // Merge candidates are always a short trailing run, so the live pass fetches only the recent
 // window instead of the whole meeting (which would be O(n) per finalize → O(n^2) overall).
@@ -113,32 +106,28 @@ async function mergeGroup(meetingId: string, provider: AiProvider, group: MergeG
   });
 }
 
-async function runCorrection(meetingId: string, options: { final?: boolean }): Promise<void> {
-  // Skip the joined settings query when we recently saw correction disabled (live path only;
-  // the end-of-meeting pass always checks fresh in case it was just enabled).
-  if (!options.final) {
-    const disabledTs = disabledUntil.get(meetingId);
-    if (disabledTs && Date.now() < disabledTs) {
+async function runCorrection(
+  meetingId: string,
+  options: { final?: boolean; settings?: AiProviderSettings | null },
+): Promise<void> {
+  // The live path passes the settings the capture runner already loaded for this finalize; the
+  // final pass passes none, so load fresh (it must reflect a just-flipped toggle at meeting end).
+  let settings = options.settings;
+  if (settings === undefined) {
+    const meeting = await prisma.meetingSession.findUnique({
+      where: { id: meetingId },
+      include: { tenant: { include: { aiProviderSettings: true } } },
+    });
+    if (!meeting) {
       return;
     }
+    settings = meeting.tenant.aiProviderSettings;
   }
-
-  // One query resolves both the opt-in toggle and the provider selection. Correction is
-  // off by default and configured per-tenant on /settings (not an env flag), so bail before
-  // any heavier work when it is disabled.
-  const meeting = await prisma.meetingSession.findUnique({
-    where: { id: meetingId },
-    include: { tenant: { include: { aiProviderSettings: true } } },
-  });
-  if (!meeting) {
-    return;
-  }
-  const settings = meeting.tenant.aiProviderSettings;
+  // Correction is off by default and configured per-tenant on /settings (not an env flag), so
+  // bail before any heavier work when it is disabled.
   if (!settings?.meetingCorrectionEnabled) {
-    disabledUntil.set(meetingId, Date.now() + ENABLED_DISABLED_TTL_MS);
     return;
   }
-  disabledUntil.delete(meetingId);
 
   // Live: only the recent window holds mergeable candidates. Final: the whole meeting, once.
   const utterances = await prisma.transcriptUtterance.findMany({
@@ -179,7 +168,7 @@ async function runCorrection(meetingId: string, options: { final?: boolean }): P
 // in-flight live run rather than dropping it (so the tail is never missed).
 export async function maybeCorrectTranscript(
   meetingId: string,
-  options: { final?: boolean } = {},
+  options: { final?: boolean; settings?: AiProviderSettings | null } = {},
 ): Promise<void> {
   if (options.final) {
     // The final pass must run; drain any in-flight live run first. Capture has already
