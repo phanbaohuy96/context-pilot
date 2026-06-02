@@ -74,6 +74,34 @@ make dev-worker         # BullMQ worker (separate terminal)
 
 The equivalent npm scripts are `npm install`, `docker compose up -d`, `npm run db:generate`, `npm run db:migrate`, `npm run dev:web`, `npm run dev:worker`.
 
+### Run in local production mode
+
+Run the built app (`next start` + the worker) as native processes against an **isolated prod
+datastore**, so your real work data stays separate from dev/test data. `docker-compose.prod.yml`
+brings up a *separate* Postgres (`:5433`) and Redis (`:6380`) under their own Docker volume and
+compose project — `docker compose down -v` on dev never touches it, and vice-versa. Prod tooling
+uses `prisma migrate deploy` (apply only), never the dev `migrate dev` (which can reset a DB).
+
+```bash
+# 1. Create the prod env file (gitignored). Copy the dev template and repoint the datastores:
+cp .env.example .env.prod
+#    then in .env.prod set (the prod Postgres password is read from .env.prod, so it is
+#    never committed — use a strong value and keep it identical in DATABASE_URL):
+#      POSTGRES_PASSWORD="<strong random password>"   # e.g. openssl rand -hex 24
+#      DATABASE_URL="postgresql://context_pilot:<same password>@localhost:5433/context_pilot?schema=public"
+#      REDIS_URL="redis://localhost:6380"
+#      SETTINGS_ENCRYPTION_KEY="<long random secret>"  # e.g. openssl rand -base64 48
+#    (AZURE_*/GRAPH_* only if you use Teams ingestion; MEETING_* defaults are fine.)
+
+make prod-setup         # start prod Postgres+Redis, migrate deploy, generate client + build
+make prod-web           # built Next.js app at http://localhost:3000
+make prod-worker        # BullMQ worker (separate terminal)
+```
+
+The same host tooling as dev is needed for the full feature set: ffmpeg + whisper-cli (meetings,
+see below), a reachable AI provider for AI features, and Azure creds + a public webhook tunnel for
+Teams ingestion.
+
 ### Verification set
 
 There is no lint script; the verification set is:
