@@ -2,6 +2,11 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createMeetingSessionSchema } from "@context-pilot/core";
 import { prisma } from "@context-pilot/db";
+import {
+  createMeetingContext,
+  meetingContextDraftFromFormData,
+  prepareMeetingContext,
+} from "../../../lib/meeting-context";
 import { getOrCreateDefaultTenant } from "../../../lib/tenant";
 
 export const dynamic = "force-dynamic";
@@ -13,8 +18,15 @@ async function startMeeting(formData: FormData) {
     title: formData.get("title"),
     platform: formData.get("platform"),
     externalContextId: emptyToUndefined(formData.get("externalContextId")),
+    contextText: emptyToUndefined(formData.get("contextText")),
   });
   const tenant = await getOrCreateDefaultTenant();
+  const contextDraft = await meetingContextDraftFromFormData(formData);
+  const preparedContext = await prepareMeetingContext({
+    tenantId: tenant.id,
+    title: input.title,
+    draft: contextDraft,
+  });
   const meeting = await prisma.meetingSession.create({
     data: {
       tenantId: tenant.id,
@@ -32,6 +44,11 @@ async function startMeeting(formData: FormData) {
       targetId: meeting.id,
       metadata: { platform: meeting.platform },
     },
+  });
+  await createMeetingContext({
+    meetingSessionId: meeting.id,
+    draft: contextDraft,
+    prepared: preparedContext,
   });
 
   revalidatePath("/meetings");
@@ -83,6 +100,15 @@ export default async function MeetingsPage() {
               Optional context ID
               <input name="externalContextId" placeholder="Calendar link, meeting code, or note" />
             </label>
+            <label>
+              Agenda / context
+              <textarea name="contextText" placeholder="Paste meeting goals, agenda, background, or concerns" rows={5} />
+            </label>
+            <label>
+              Agenda file
+              <input name="contextFile" type="file" accept=".txt,.md,.csv,.json,.pdf,text/*,application/json,application/pdf" />
+            </label>
+            <p className="muted">Files are extracted to text locally; uploaded bytes are not retained.</p>
             <button type="submit">Start session</button>
           </form>
         </section>

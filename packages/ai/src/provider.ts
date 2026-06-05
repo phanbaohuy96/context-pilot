@@ -4,6 +4,7 @@ import type {
   AiProviderKind,
   ExtractedRequirement,
   MeetingNotesContext,
+  PreparedMeetingContext,
   TranscriptCorrectionContext,
   TranslationContext,
 } from "@context-pilot/core";
@@ -29,6 +30,10 @@ export type MeetingNotesResult = {
   model: string;
 };
 
+export type MeetingContextPreparationResult = PreparedMeetingContext & {
+  model: string;
+};
+
 export type TranscriptCorrectionResult = {
   text: string;
   model: string;
@@ -45,6 +50,7 @@ export type AiProvider = {
   summarizeThread(input: AgentContextBundle): Promise<ThreadSummaryResult>;
   extractRequirements(input: AgentContextBundle): Promise<RequirementExtractionResult>;
   answerQuestion(input: AgentContextBundle & { question: string }): Promise<AgentAnswer>;
+  prepareMeetingContext(input: { title?: string; contextText: string }): Promise<MeetingContextPreparationResult>;
   summarizeMeeting(input: MeetingNotesContext): Promise<MeetingNotesResult>;
   correctTranscript(input: TranscriptCorrectionContext): Promise<TranscriptCorrectionResult>;
   translateText(input: TranslationContext): Promise<TranslationResult>;

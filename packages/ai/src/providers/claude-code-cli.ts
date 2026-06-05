@@ -7,14 +7,16 @@ import type {
   TranslationContext,
 } from "@context-pilot/core";
 import { buildAnswerPrompt } from "../prompts/answer";
+import { buildMeetingContextPrompt } from "../prompts/meeting-context";
 import { buildMeetingNotesPrompt } from "../prompts/meeting-notes";
 import { buildRequirementsPrompt } from "../prompts/requirements";
 import { buildSummarizePrompt } from "../prompts/summarize";
 import { buildTranscriptCorrectionPrompt } from "../prompts/transcript-correction";
 import { buildTranslatePrompt } from "../prompts/translate";
-import { parseMeetingNotes, parseRequirementExtraction, parseTranscriptCorrection, parseTranslation } from "../json";
+import { parseMeetingContext, parseMeetingNotes, parseRequirementExtraction, parseTranscriptCorrection, parseTranslation } from "../json";
 import type {
   AiProvider,
+  MeetingContextPreparationResult,
   MeetingNotesResult,
   RequirementExtractionResult,
   ThreadSummaryResult,
@@ -62,6 +64,11 @@ export class ClaudeCodeCliProvider implements AiProvider {
       evidenceMessageIds: input.messages.map((message) => message.id),
       model: this.model,
     };
+  }
+
+  async prepareMeetingContext(input: { title?: string; contextText: string }): Promise<MeetingContextPreparationResult> {
+    const text = await this.runClaude(buildMeetingContextPrompt(input));
+    return { ...parseMeetingContext(text), model: this.model };
   }
 
   async summarizeMeeting(input: MeetingNotesContext): Promise<MeetingNotesResult> {

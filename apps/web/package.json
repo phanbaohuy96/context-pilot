@@ -9,15 +9,16 @@
     "start": "next start"
   },
   "dependencies": {
-    "@huggingface/transformers": "^4.2.0",
-    "@prisma/client": "^6.8.2",
     "@context-pilot/ai": "0.1.0",
     "@context-pilot/core": "0.1.0",
     "@context-pilot/db": "0.1.0",
     "@context-pilot/graph": "0.1.0",
+    "@huggingface/transformers": "^4.2.0",
+    "@prisma/client": "^6.8.2",
     "bullmq": "^5.52.2",
     "ioredis": "^5.6.1",
     "next": "^15.3.2",
+    "pdf-parse": "^2.4.5",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "zod": "^3.25.28"

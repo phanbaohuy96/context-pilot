@@ -1,6 +1,6 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import type { MeetingSourceChannel, MeetingSpeakerRole } from "@prisma/client";
@@ -68,6 +68,21 @@ function whisperCommand(): string {
 function whisperModelPath(): string {
   return process.env.MEETING_CAPTURE_WHISPER_MODEL
     ?? join(homedir(), ".cache", "context-pilot", "models", "ggml-tiny.en.bin");
+}
+
+export async function assertWhisperModelAvailable(modelPath = whisperModelPath()): Promise<void> {
+  const message = `Whisper model not found at ${modelPath}. Put a whisper.cpp GGML model there or set MEETING_CAPTURE_WHISPER_MODEL.`;
+  try {
+    const model = await stat(modelPath);
+    if (!model.isFile()) {
+      throw new Error(message);
+    }
+  } catch (error) {
+    if (error instanceof Error && error.message === message) {
+      throw error;
+    }
+    throw new Error(message);
+  }
 }
 
 function ffmpegFormat(): string {
@@ -504,7 +519,10 @@ class CaptureRunner {
       // features, so notes and correction don't each re-query the same row every finalize.
       const meeting = await prisma.meetingSession.findUnique({
         where: { id: this.meetingId },
-        include: { tenant: { include: { aiProviderSettings: true } } },
+        include: {
+          tenant: { include: { aiProviderSettings: true } },
+          context: { select: { briefing: true, agendaItems: true, openQuestions: true, risks: true, keywords: true } },
+        },
       });
       if (meeting) {
         // Refresh the rolling LLM notes off the capture path (throttled per meeting; no-op
@@ -579,8 +597,6 @@ class MeetingCapture {
 const captures = new Map<string, MeetingCapture>();
 
 export async function startCapture(meetingId: string, options: StartCaptureOptions): Promise<CaptureStatus> {
-  await stopCapture(meetingId);
-
   const capture = new MeetingCapture(meetingId);
   if (options.mic) {
     // Mic is a single speaker (you), so no diarization needed.
@@ -608,8 +624,17 @@ export async function startCapture(meetingId: string, options: StartCaptureOptio
     throw new Error("Select a microphone or a meeting audio device before starting capture.");
   }
 
+  await assertWhisperModelAvailable();
+  await stopCapture(meetingId);
+
   captures.set(meetingId, capture);
-  await Promise.all(capture.runners.map((runner) => runner.start()));
+  try {
+    await Promise.all(capture.runners.map((runner) => runner.start()));
+  } catch (error) {
+    captures.delete(meetingId);
+    await capture.stop().catch(() => undefined);
+    throw error;
+  }
   return capture.status();
 }
 

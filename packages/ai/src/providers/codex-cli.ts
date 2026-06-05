@@ -9,8 +9,9 @@ import type {
   TranscriptCorrectionContext,
   TranslationContext,
 } from "@context-pilot/core";
-import { parseMeetingNotes, parseRequirementExtraction, parseTranscriptCorrection, parseTranslation } from "../json";
+import { parseMeetingContext, parseMeetingNotes, parseRequirementExtraction, parseTranscriptCorrection, parseTranslation } from "../json";
 import { buildAnswerPrompt } from "../prompts/answer";
+import { buildMeetingContextPrompt } from "../prompts/meeting-context";
 import { buildMeetingNotesPrompt } from "../prompts/meeting-notes";
 import { buildRequirementsPrompt } from "../prompts/requirements";
 import { buildSummarizePrompt } from "../prompts/summarize";
@@ -18,6 +19,7 @@ import { buildTranscriptCorrectionPrompt } from "../prompts/transcript-correctio
 import { buildTranslatePrompt } from "../prompts/translate";
 import type {
   AiProvider,
+  MeetingContextPreparationResult,
   MeetingNotesResult,
   RequirementExtractionResult,
   ThreadSummaryResult,
@@ -65,6 +67,11 @@ export class CodexCliProvider implements AiProvider {
       evidenceMessageIds: input.messages.map((message) => message.id),
       model: this.model,
     };
+  }
+
+  async prepareMeetingContext(input: { title?: string; contextText: string }): Promise<MeetingContextPreparationResult> {
+    const text = await this.runCodex(buildMeetingContextPrompt(input));
+    return { ...parseMeetingContext(text), model: this.model };
   }
 
   async summarizeMeeting(input: MeetingNotesContext): Promise<MeetingNotesResult> {

@@ -13,6 +13,7 @@ import { LiveMeetingWorkspace } from "../../../../components/LiveMeetingWorkspac
 import { maybeCorrectTranscript } from "../../../../lib/meeting-correction";
 import { TRANSCRIPT_FETCH_WINDOW, visibleTranscriptWindow } from "../../../../lib/meeting-utterances";
 import { importedMediaFileName } from "../../../../lib/imported-diarization";
+import { preparedContextFromRecord } from "../../../../lib/meeting-context";
 
 export const dynamic = "force-dynamic";
 
@@ -62,6 +63,7 @@ export default async function MeetingWorkspacePage({ params }: MeetingWorkspaceP
     where: { id: meetingId },
     include: {
       source: true,
+      context: { select: { briefing: true, agendaItems: true, openQuestions: true, risks: true, keywords: true } },
       // Wider recent window (desc) so dropping correction-superseded rows still leaves a
       // full visible window on a long meeting; restored to chronological order below.
       utterances: { orderBy: { startedAt: "desc" }, take: TRANSCRIPT_FETCH_WINDOW },
@@ -87,6 +89,7 @@ export default async function MeetingWorkspacePage({ params }: MeetingWorkspaceP
       audioSource={meeting.externalContextId ?? "mic + meeting audio"}
       linkedSource={meeting.source?.displayName ?? null}
       importMediaFile={importedMediaFileName(meeting.externalContextId)}
+      context={preparedContextFromRecord(meeting.context) ?? null}
       headerAction={(
         <form action={endMeeting}>
           <input type="hidden" name="meetingId" value={meeting.id} />

@@ -17,7 +17,7 @@ type AiProvider = {
 };
 ```
 
-`summarizeMeeting` takes a `MeetingNotesContext` (the meeting title + a speaker-labelled transcript) and returns `{ summary, openQuestions, actionItems }` — the rolling meeting notes. See [meeting-assistant.md](meeting-assistant.md).
+`prepareMeetingContext` takes pasted/upload-extracted meeting context before capture starts and returns a private briefing, agenda items, open questions, risks, and keywords. `summarizeMeeting` takes a `MeetingNotesContext` (the meeting title + optional prepared context + a speaker-labelled transcript) and returns `{ summary, openQuestions, actionItems }` — the rolling meeting notes. See [meeting-assistant.md](meeting-assistant.md).
 
 `AgentContextBundle` carries the retrieved evidence (recent messages, summaries, non-rejected requirements). Prompt templates in `packages/ai/src/prompts/` treat Teams content as **untrusted evidence** and require message-id citations; `packages/ai/src/json.ts` robustly parses model output.
 
@@ -46,6 +46,7 @@ The `/settings` dashboard page stores tenant-wide provider defaults in Postgres 
 
 - Teams summarization and requirement extraction.
 - Ask agent.
+- Pre-meeting context preparation, when agenda/context is supplied.
 - Rolling meeting notes, when enabled on `/settings`.
 
 The settings row also stores shared provider config for the local OpenAI-compatible endpoint, Claude Code CLI, and Codex CLI. A local API key saved from the page is encrypted with `SETTINGS_ENCRYPTION_KEY`; decrypted secrets are never returned to the UI, which only shows whether a key exists. If there is no settings row, feature execution falls back to hard-coded local defaults: each feature uses `LOCAL_OPENAI`, local base URL `http://localhost:11434/v1`, model `llama3.1`, CLI commands `claude`/`codex`, and 120s timeouts.
@@ -84,7 +85,7 @@ flowchart LR
 
 ### Meeting notes (web)
 
-When enabled on `/settings`, `apps/web/src/lib/meeting-notes.ts` summarizes the transcript during the meeting. It is fire-and-forget off the capture path, throttled per meeting, resolves the configured Meeting notes provider, and upserts a single rolling `MeetingSummary` via `summarizeMeeting`. See [meeting-assistant.md](meeting-assistant.md).
+When agenda/context is supplied, `apps/web/src/lib/meeting-context.ts` extracts pasted text or text/PDF uploads, discards uploaded bytes, and calls the configured Meeting notes provider once via `prepareMeetingContext`. When enabled on `/settings`, `apps/web/src/lib/meeting-notes.ts` summarizes the transcript during the meeting. It is fire-and-forget off the capture path, throttled per meeting, resolves the configured Meeting notes provider, and upserts a single rolling `MeetingSummary` via `summarizeMeeting`. See [meeting-assistant.md](meeting-assistant.md).
 
 ## What stays off the provider
 
