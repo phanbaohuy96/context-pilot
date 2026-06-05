@@ -6,7 +6,12 @@ const nextConfig = {
     "@context-pilot/db",
     "@context-pilot/graph",
   ],
-  serverExternalPackages: ["@prisma/client"],
+  serverExternalPackages: ["@prisma/client", "pdf-parse"],
+  experimental: {
+    serverActions: {
+      bodySizeLimit: "8mb",
+    },
+  },
 };
 
 export default nextConfig;

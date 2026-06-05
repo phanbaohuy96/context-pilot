@@ -72,9 +72,18 @@ type Summary = {
   createdAt: string;
 };
 
+type PreparedMeetingContext = {
+  briefing: string;
+  agendaItems: string[];
+  openQuestions: string[];
+  risks: string[];
+  keywords: string[];
+};
+
 type MeetingPayload = {
   id: string;
   status: MeetingStatus;
+  context: PreparedMeetingContext | null;
   utterances: RawUtterance[];
   insights: Insight[];
   summaries: Summary[];
@@ -124,6 +133,7 @@ type LiveMeetingWorkspaceProps = {
   audioSource: string;
   linkedSource: string | null;
   importMediaFile: string | null;
+  context: PreparedMeetingContext | null;
   headerAction: ReactNode;
   initialUtterances: Utterance[];
   initialInsights: Insight[];
@@ -139,6 +149,7 @@ export function LiveMeetingWorkspace({
   audioSource,
   linkedSource,
   importMediaFile,
+  context,
   headerAction,
   initialUtterances,
   initialInsights,
@@ -148,6 +159,7 @@ export function LiveMeetingWorkspace({
   const [utterances, setUtterances] = useState(initialUtterances);
   const [insights, setInsights] = useState(initialInsights);
   const [summaries, setSummaries] = useState(initialSummaries);
+  const [meetingContext, setMeetingContext] = useState(context);
 
   const [devices, setDevices] = useState<AudioDevice[]>([]);
   const [micInput, setMicInput] = useState("");
@@ -310,6 +322,7 @@ export function LiveMeetingWorkspace({
     if (meetingResult.ok) {
       const body = await meetingResult.json() as { meeting: MeetingPayload };
       setMeetingStatus(body.meeting.status);
+      setMeetingContext(body.meeting.context);
       setUtterances(body.meeting.utterances.map(toUtterance));
       setInsights(body.meeting.insights);
       setSummaries(body.meeting.summaries);
@@ -608,6 +621,9 @@ export function LiveMeetingWorkspace({
   const latestNotes = summaries[0];
   const hasNotes = Boolean(
     latestNotes && (latestNotes.summary || latestNotes.actionItems.length || latestNotes.openQuestions.length),
+  );
+  const hasContext = Boolean(
+    meetingContext && (meetingContext.briefing || meetingContext.agendaItems.length || meetingContext.openQuestions.length || meetingContext.risks.length),
   );
 
   // Pair each question with its suggested answer (both emitted from one utterance)
@@ -911,6 +927,36 @@ export function LiveMeetingWorkspace({
               <h3>Meeting notes</h3>
               {latestNotes ? <span className="rail-count">synthesized</span> : null}
             </div>
+            {hasContext && meetingContext ? (
+              <div className="notes-body meeting-context-body">
+                <div className="notes-grid">
+                  <div className="notes-block">
+                    <p className="notes-label">Context</p>
+                    {meetingContext.briefing ? <p className="message">{meetingContext.briefing}</p> : <p className="muted">—</p>}
+                  </div>
+                  <div className="notes-block">
+                    <p className="notes-label">Agenda</p>
+                    {meetingContext.agendaItems.length ? (
+                      <ul className="notes-list">
+                        {meetingContext.agendaItems.map((item) => <li key={item}>{item}</li>)}
+                      </ul>
+                    ) : (
+                      <p className="muted">—</p>
+                    )}
+                  </div>
+                  <div className="notes-block">
+                    <p className="notes-label">Watch</p>
+                    {meetingContext.openQuestions.length || meetingContext.risks.length ? (
+                      <ul className="notes-list questions">
+                        {[...meetingContext.openQuestions, ...meetingContext.risks].map((item) => <li key={item}>{item}</li>)}
+                      </ul>
+                    ) : (
+                      <p className="muted">—</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ) : null}
             {hasNotes ? (
               <div className="notes-body">
                 <div className="notes-grid">

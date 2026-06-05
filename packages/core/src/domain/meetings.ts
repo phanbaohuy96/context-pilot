@@ -33,6 +33,7 @@ export const createMeetingSessionSchema = z.object({
   platform: meetingPlatformSchema.default("OTHER"),
   sourceId: z.string().trim().min(1).optional(),
   externalContextId: z.string().trim().min(1).max(500).optional(),
+  contextText: z.string().trim().max(60000).optional(),
 });
 export type CreateMeetingSessionInput = z.infer<typeof createMeetingSessionSchema>;
 
@@ -121,9 +122,19 @@ export const meetingNotesSchema = z.object({
 });
 export type MeetingNotes = z.infer<typeof meetingNotesSchema>;
 
+export const preparedMeetingContextSchema = z.object({
+  briefing: z.string().trim().default(""),
+  agendaItems: z.array(z.string().trim().min(1)).default([]),
+  openQuestions: z.array(z.string().trim().min(1)).default([]),
+  risks: z.array(z.string().trim().min(1)).default([]),
+  keywords: z.array(z.string().trim().min(1)).default([]),
+});
+export type PreparedMeetingContext = z.infer<typeof preparedMeetingContextSchema>;
+
 export type MeetingTranscriptLine = { speaker: string; text: string };
 export type MeetingNotesContext = {
   title?: string;
+  context?: PreparedMeetingContext;
   transcript: MeetingTranscriptLine[];
 };
 
@@ -274,6 +285,7 @@ export type MeetingAssistDetectionInput = {
   text: string;
   speakerRole: MeetingSpeakerRole;
   userName?: string;
+  context?: PreparedMeetingContext;
 };
 
 export type DetectedMeetingInsight = {
@@ -355,6 +367,11 @@ export function detectMeetingAssistInsights(input: MeetingAssistDetectionInput):
     });
   }
 
+  const contextualNote = detectContextualNote(normalizedText, input);
+  if (contextualNote) {
+    insights.push(contextualNote);
+  }
+
   return insights;
 }
 
@@ -433,6 +450,57 @@ function buildAnswerSuggestion(text: string, keywords: string[]): string {
   }
 
   return `${prefix} acknowledge the question, then give a short direct answer. Context: ${text}`;
+}
+
+function detectContextualNote(
+  normalizedText: string,
+  input: MeetingAssistDetectionInput,
+): DetectedMeetingInsight | null {
+  const context = input.context;
+  if (!context) {
+    return null;
+  }
+
+  const contextKeywords = contextKeywordCandidates(context);
+  const matched = contextKeywords
+    .filter((keyword) => new RegExp(`\\b${escapeRegExp(keyword)}\\b`, "i").test(normalizedText))
+    .slice(0, 5);
+  if (!matched.length) {
+    return null;
+  }
+
+  const agendaItem = context.agendaItems.find((item) =>
+    matched.some((keyword) => new RegExp(`\\b${escapeRegExp(keyword)}\\b`, "i").test(item)),
+  );
+  return {
+    kind: "NOTE",
+    text: agendaItem
+      ? `Agenda signal: ${agendaItem}`
+      : `Agenda signal: discussion matched ${matched.join(", ")}.`,
+    keywords: matched,
+    relatedUtteranceIds: [input.utteranceId],
+    confidence: 0.66,
+  };
+}
+
+function contextKeywordCandidates(context: PreparedMeetingContext): string[] {
+  const values = [
+    ...context.keywords,
+    ...context.agendaItems.flatMap(extractKeywords),
+    ...context.openQuestions.flatMap(extractKeywords),
+    ...context.risks.flatMap(extractKeywords),
+  ];
+  const seen = new Set<string>();
+  const candidates: string[] = [];
+  for (const value of values) {
+    const normalized = value.toLowerCase().trim();
+    if (normalized.length < 4 || KEYWORD_STOP_WORDS.has(normalized) || seen.has(normalized)) {
+      continue;
+    }
+    seen.add(normalized);
+    candidates.push(normalized);
+  }
+  return candidates.slice(0, 40);
 }
 
 function escapeRegExp(value: string): string {

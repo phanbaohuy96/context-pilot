@@ -106,7 +106,7 @@ Two domains share the same database:
 
 `ThreadSummary`, `Requirement`, and `AgentSession` all retain `evidenceMessageIds` so AI outputs trace back to the Teams messages that justified them.
 
-In the meeting domain, `TranscriptUtterance` carries audio-relative `startedAt`/`endedAt` (derived from frame indices) and `confidence`, with the speaker label/key in `engineMetadata` when diarization is on; `MeetingSummary` is the meeting's rolling LLM notes (`summary` + `openQuestions` + `actionItems`), updated in place.
+In the meeting domain, `TranscriptUtterance` carries audio-relative `startedAt`/`endedAt` (derived from frame indices) and `confidence`, with the speaker label/key in `engineMetadata` when diarization is on; `MeetingContext` stores optional extracted agenda/context text plus the prepared AI briefing/keywords; `MeetingSummary` is the meeting's rolling LLM notes (`summary` + `openQuestions` + `actionItems`), updated in place.
 
 ## Job queues
 

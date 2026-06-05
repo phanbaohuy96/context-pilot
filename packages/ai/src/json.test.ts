@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseMeetingNotes, parseTranscriptCorrection, parseTranslation } from "./json";
+import { parseMeetingContext, parseMeetingNotes, parseTranscriptCorrection, parseTranslation } from "./json";
 
 describe("parseMeetingNotes", () => {
   it("parses a plain JSON object", () => {
@@ -25,6 +25,36 @@ describe("parseMeetingNotes", () => {
       summary: "",
       openQuestions: [],
       actionItems: [],
+    });
+  });
+});
+
+describe("parseMeetingContext", () => {
+  it("parses prepared meeting context JSON", () => {
+    const context = parseMeetingContext('{"briefing":"Discuss launch.","agendaItems":["Review launch"],"openQuestions":["Who owns rollout?"],"risks":["Late QA"],"keywords":["launch","qa"]}');
+    expect(context).toEqual({
+      briefing: "Discuss launch.",
+      agendaItems: ["Review launch"],
+      openQuestions: ["Who owns rollout?"],
+      risks: ["Late QA"],
+      keywords: ["launch", "qa"],
+    });
+  });
+
+  it("defaults missing arrays and tolerates no JSON", () => {
+    expect(parseMeetingContext('{"briefing":"Only context."}')).toEqual({
+      briefing: "Only context.",
+      agendaItems: [],
+      openQuestions: [],
+      risks: [],
+      keywords: [],
+    });
+    expect(parseMeetingContext("no context")).toEqual({
+      briefing: "",
+      agendaItems: [],
+      openQuestions: [],
+      risks: [],
+      keywords: [],
     });
   });
 });

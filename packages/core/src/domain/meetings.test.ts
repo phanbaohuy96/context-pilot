@@ -148,6 +148,28 @@ describe("meeting assist insight detection", () => {
 
     expect(insights).toEqual([]);
   });
+
+  it("emits an agenda signal when prepared context keywords are heard", () => {
+    const insights = detectMeetingAssistInsights({
+      utteranceId: "utt_context",
+      speakerRole: "OTHER",
+      text: "We should revisit the launch risk before sign-off.",
+      context: {
+        briefing: "Launch readiness review.",
+        agendaItems: ["Review launch risk and sign-off plan"],
+        openQuestions: [],
+        risks: [],
+        keywords: ["launch", "sign-off"],
+      },
+    });
+
+    const note = insights.find((insight) => insight.kind === "NOTE");
+    expect(note).toMatchObject({
+      text: "Agenda signal: Review launch risk and sign-off plan",
+      keywords: ["launch", "sign-off", "risk"],
+      relatedUtteranceIds: ["utt_context"],
+    });
+  });
 });
 
 describe("endsWithTerminalPunctuation", () => {

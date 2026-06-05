@@ -289,9 +289,31 @@ model MeetingSession {
   utterances        TranscriptUtterance[]
   insights          MeetingInsight[]
   summaries         MeetingSummary[]
+  context           MeetingContext?
 
   @@index([tenantId, status, startedAt])
   @@index([sourceId, startedAt])
+}
+
+model MeetingContext {
+  id               String         @id @default(cuid())
+  meetingSessionId String         @unique
+  meetingSession   MeetingSession @relation(fields: [meetingSessionId], references: [id], onDelete: Cascade)
+  sourceText       String
+  sourceFileName   String?
+  sourceMimeType   String?
+  briefing         String         @default("")
+  agendaItems      String[]       @default([])
+  openQuestions    String[]       @default([])
+  risks            String[]       @default([])
+  keywords         String[]       @default([])
+  provider         AiProviderKind?
+  model            String?
+  promptVersion    String?
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+
+  @@index([meetingSessionId])
 }
 
 model TranscriptUtterance {

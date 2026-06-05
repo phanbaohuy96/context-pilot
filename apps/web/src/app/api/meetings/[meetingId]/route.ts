@@ -18,6 +18,7 @@ export async function GET(_request: Request, { params }: MeetingRouteContext): P
     where: { id: meetingId },
     include: {
       source: true,
+      context: { select: { briefing: true, agendaItems: true, openQuestions: true, risks: true, keywords: true } },
       // Fetch a wider recent window (desc) so that after correction-superseded rows are
       // dropped the live caption is never lost on a long meeting; restore chronological
       // order for the client.

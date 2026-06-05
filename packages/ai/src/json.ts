@@ -1,7 +1,9 @@
 import {
   meetingNotesSchema,
+  preparedMeetingContextSchema,
   requirementExtractionSchema,
   type MeetingNotes,
+  type PreparedMeetingContext,
   type RequirementExtraction,
 } from "@context-pilot/core";
 
@@ -33,6 +35,14 @@ export function parseMeetingNotes(text: string): MeetingNotes {
     return { summary: "", openQuestions: [], actionItems: [] };
   }
   return meetingNotesSchema.parse(JSON.parse(candidate));
+}
+
+export function parseMeetingContext(text: string): PreparedMeetingContext {
+  const candidate = extractJsonObject(text);
+  if (!candidate) {
+    return { briefing: "", agendaItems: [], openQuestions: [], risks: [], keywords: [] };
+  }
+  return preparedMeetingContextSchema.parse(JSON.parse(candidate));
 }
 
 // Reads the `text` field from a {"text":"..."} response, tolerating a model that

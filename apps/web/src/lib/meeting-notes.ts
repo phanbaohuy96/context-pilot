@@ -8,11 +8,15 @@ import {
 } from "@context-pilot/core";
 import { prisma, resolveAiProviderConfigFromSettings } from "@context-pilot/db";
 import type { Prisma, TranscriptUtterance } from "@prisma/client";
+import { preparedContextFromRecord } from "./meeting-context";
 
 // The meeting row with its tenant's provider settings joined — loaded once per finalize by the
 // capture runner and passed in, so notes and correction don't each re-query the same row.
 export type MeetingWithProviderSettings = Prisma.MeetingSessionGetPayload<{
-  include: { tenant: { include: { aiProviderSettings: true } } };
+  include: {
+    tenant: { include: { aiProviderSettings: true } };
+    context: { select: { briefing: true; agendaItems: true; openQuestions: true; risks: true; keywords: true } };
+  };
 }>;
 
 // Regenerate rolling notes after this many new finalized utterances since the last run.
@@ -106,7 +110,11 @@ export async function maybeGenerateMeetingNotes(meeting: MeetingWithProviderSett
 
     const resolvedProvider = resolveAiProviderConfigFromSettings(settings, "MEETING_NOTES");
     const provider = createAiProvider(resolvedProvider.providerKind, resolvedProvider.providerConfig);
-    const notes = await provider.summarizeMeeting({ title: meeting.title, transcript });
+    const notes = await provider.summarizeMeeting({
+      title: meeting.title,
+      context: preparedContextFromRecord(meeting.context),
+      transcript,
+    });
     if (!notes.summary && !notes.openQuestions.length && !notes.actionItems.length) {
       return;
     }
